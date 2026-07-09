@@ -1,10 +1,11 @@
 "use client";
 
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 
 /*
   Motion.dev scope: component reveals only. GSAP never animates these nodes —
   scroll-scrubbed transforms live on separate [data-gsap] wrappers.
+  Reduced motion: content renders in place, no hidden state ever.
 */
 export default function Reveal({
   children,
@@ -13,6 +14,12 @@ export default function Reveal({
   y = 28,
   once = true,
 }) {
+  const reduced = useReducedMotion();
+
+  if (reduced) {
+    return <div className={className}>{children}</div>;
+  }
+
   return (
     <motion.div
       className={className}

@@ -1,84 +1,94 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Reveal from "@/components/ui/Reveal";
-import SectionHeading from "@/components/ui/SectionHeading";
-import { skills, marquee } from "@/lib/data";
+import { gsap } from "@/lib/gsapClient";
+import { skills } from "@/lib/data";
 
+/*
+  Technical skillset — editorial index rows instead of labeled cards.
+  Each row underlines itself on scroll-in; items brighten on hover.
+  The n8n specialization gets the full-width closing statement.
+*/
 export default function Skills() {
+  const rootRef = useRef(null);
   const clusters = skills.filter((s) => !s.featured);
   const featured = skills.find((s) => s.featured);
 
+  useEffect(() => {
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const ctx = gsap.context(() => {
+      if (reduced) return;
+      gsap.utils.toArray("[data-rule]").forEach((rule) => {
+        gsap.fromTo(
+          rule,
+          { scaleX: 0 },
+          {
+            scaleX: 1,
+            duration: 1.4,
+            ease: "power4.inOut",
+            scrollTrigger: { trigger: rule, start: "top 88%", once: true },
+          }
+        );
+      });
+    }, rootRef);
+    return () => ctx.revert();
+  }, []);
+
   return (
-    <section id="skills" className="pt-36">
-      {/* full-bleed marquee strip */}
+    <section id="skills" ref={rootRef} className="px-6 pb-28 sm:px-10 md:pb-36">
       <Reveal>
-        <div className="hairline overflow-hidden border-x-0 py-4">
-          <div className="marquee-track flex w-max gap-8 whitespace-nowrap">
-            {[...marquee, ...marquee].map((m, i) => (
-              <span
-                key={i}
-                className="flex items-center gap-8 font-mono text-sm lowercase tracking-[0.18em] text-mute"
-              >
-                {m} <span className="text-mint/70">✲</span>
-              </span>
-            ))}
-          </div>
-        </div>
+        <p className="label mb-4">Technical skillset</p>
+        <h2
+          className="mb-14 max-w-3xl font-display text-[length:var(--step-3)] font-medium leading-[1.06] tracking-[-0.01em]"
+          style={{ fontVariationSettings: "'opsz' 100, 'SOFT' 50" }}
+        >
+          The toolbox, honestly listed.
+        </h2>
       </Reveal>
 
-      <div className="px-6 pt-24 sm:px-10">
-        <SectionHeading
-          index="03"
-          name="technical skillset"
-          meta={[
-            ["category", "stack"],
-            ["style", "curated"],
-            ["interaction", "hover"],
-          ]}
-        />
-
-        <div className="grid gap-5 md:grid-cols-2">
-          {clusters.map((c, ci) => (
-            <Reveal key={c.label} delay={ci * 0.1}>
-              <div className="hairline h-full rounded-2xl bg-soot/60 p-7 backdrop-blur-sm sm:p-8">
-                <p className="telemetry mb-6">{c.label}</p>
-                <div className="flex flex-wrap gap-2.5">
-                  {c.items.map((item) => (
-                    <span
-                      key={item}
-                      className="glass-pill aurora px-4 py-2 text-sm text-ink/90"
-                    >
-                      {item}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </Reveal>
-          ))}
-
-          {/* the specialization — full-width feature card */}
-          <Reveal className="md:col-span-2">
-            <div className="iri-card flex flex-col justify-between gap-8 p-8 sm:flex-row sm:items-end sm:p-10">
-              <div>
-                <p className="telemetry mb-5 flex items-center gap-2">
-                  <span className="live-dot" aria-hidden="true" />
-                  {featured.label} · always-on
-                </p>
-                <p className="font-display text-4xl uppercase leading-[0.92] tracking-tight sm:text-6xl">
-                  n8n
-                  <span className="block text-white/45">
-                    expert workflow management
+      <div>
+        {clusters.map((c, ci) => (
+          <Reveal key={c.label} delay={ci * 0.08}>
+            <div className="grid gap-4 py-8 md:grid-cols-[16rem_1fr] md:items-baseline">
+              <p className="label">{c.label}</p>
+              <div className="flex flex-wrap gap-x-8 gap-y-3">
+                {c.items.map((item) => (
+                  <span
+                    key={item}
+                    className="text-[length:var(--step-1)] text-ink/70 transition-colors duration-300 hover:text-ember"
+                    data-cursor
+                  >
+                    {item}
                   </span>
-                </p>
+                ))}
               </div>
-              <p className="max-w-sm text-sm leading-relaxed text-mute">
-                the engine behind the journey above — deep orchestrations,
-                webhook meshes, api glue and gpt pipelines, composed as
-                workflows that never ask for attention.
+            </div>
+            <div
+              data-rule
+              className="h-px w-full origin-left bg-ink/12"
+              aria-hidden="true"
+            />
+          </Reveal>
+        ))}
+
+        {/* the specialization */}
+        <Reveal>
+          <div className="grid gap-6 py-10 md:grid-cols-[16rem_1fr] md:items-start">
+            <p className="label">{featured.label}</p>
+            <div>
+              <p
+                className="font-display text-[length:var(--step-3)] font-medium leading-none text-plum"
+                style={{ fontVariationSettings: "'opsz' 100, 'SOFT' 60" }}
+              >
+                n8n<span className="text-ember">.</span>
+              </p>
+              <p className="mt-4 max-w-xl leading-relaxed text-mute">
+                {featured.note}
               </p>
             </div>
-          </Reveal>
-        </div>
+          </div>
+        </Reveal>
       </div>
     </section>
   );

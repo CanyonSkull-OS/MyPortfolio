@@ -2,63 +2,58 @@
 
 import { motion } from "motion/react";
 import Reveal from "@/components/ui/Reveal";
-import SectionHeading from "@/components/ui/SectionHeading";
 import { projects, identity } from "@/lib/data";
 
-const GLOW = {
-  iris: "bg-[radial-gradient(120%_90%_at_85%_0%,rgb(139_92_246/0.20),transparent_60%)]",
-  cyanic: "bg-[radial-gradient(120%_90%_at_85%_0%,rgb(34_211_238/0.16),transparent_60%)]",
-  orchid: "bg-[radial-gradient(120%_90%_at_85%_0%,rgb(232_121_249/0.16),transparent_60%)]",
-};
-
+/*
+  Software projects — a quiet bento on the cream base. Depth comes from soft
+  shadow, hover lift and a plum wash, not neon borders.
+*/
 function ProjectCard({ p, className = "" }) {
   return (
     <motion.article
       whileHover={{ y: -6 }}
       transition={{ type: "spring", stiffness: 260, damping: 24 }}
-      className={`iri-card group relative flex flex-col justify-between overflow-hidden p-7 sm:p-8 ${className}`}
+      className={`card-soft group relative flex flex-col justify-between overflow-hidden p-7 sm:p-9 ${className}`}
     >
       <div
         aria-hidden="true"
-        className={`pointer-events-none absolute inset-0 opacity-60 transition-opacity duration-500 group-hover:opacity-100 ${GLOW[p.hue]}`}
+        className="pointer-events-none absolute inset-x-0 top-0 h-40 opacity-0 transition-opacity duration-700 group-hover:opacity-100"
+        style={{
+          background:
+            "radial-gradient(70% 100% at 80% 0%, rgb(67 32 60 / 0.09), transparent 70%)",
+        }}
       />
       <div className="relative">
-        <div className="mb-7 flex items-center justify-between">
-          <span className="glass-pill px-3 py-1 text-[0.65rem] tracking-[0.14em] text-mute">
-            {p.year}
-          </span>
-          <p className="telemetry">{p.kicker}</p>
+        <div className="mb-7 flex items-baseline justify-between gap-4">
+          <p className="label">{p.kicker}</p>
+          <span className="tag">{p.year}</span>
         </div>
-        <h3 className="font-display text-3xl uppercase leading-[0.95] tracking-tight sm:text-4xl">
+        <h3
+          className="font-display text-[length:var(--step-2)] font-medium leading-[1.05] tracking-[-0.01em]"
+          style={{ fontVariationSettings: "'opsz' 72, 'SOFT' 40" }}
+        >
           {p.title}
         </h3>
-        <p className="mt-5 max-w-lg leading-relaxed text-ink/80">{p.body}</p>
+        <p className="mt-4 max-w-lg leading-relaxed text-ink/75">{p.body}</p>
       </div>
 
-      <div className="relative mt-9 space-y-5">
+      <div className="relative mt-9 flex flex-wrap items-center justify-between gap-4 border-t border-ink/8 pt-5">
         <div className="flex flex-wrap gap-2">
           {p.stack.map((s) => (
-            <span
-              key={s}
-              className="rounded-full border border-white/10 px-3 py-1 text-xs text-mute"
-            >
+            <span key={s} className="tag">
               {s}
             </span>
           ))}
         </div>
-        <div className="meta-row text-mute">
-          <p>
-            <span className="text-white/35">role: </span>
-            {p.role}
-          </p>
-          {/* instant, explicit outbound link */}
+        <div className="flex items-center gap-5">
+          <p className="text-sm text-mute">{p.role}</p>
           <a
             href={p.github}
             target="_blank"
             rel="noopener noreferrer"
-            className="glass-pill aurora -my-1.5 px-4 py-1.5 lowercase text-ink transition-colors hover:text-mint"
+            className="link-line text-sm font-medium text-ember"
           >
-            github ↗
+            GitHub ↗
           </a>
         </div>
       </div>
@@ -68,55 +63,58 @@ function ProjectCard({ p, className = "" }) {
 
 export default function Projects() {
   return (
-    <section id="projects" className="px-6 pt-36 sm:px-10">
-      <SectionHeading
-        index="02"
-        name="projects"
-        meta={[
-          ["category", "software"],
-          ["style", "bento"],
-          ["color", "dark · vibrant"],
-        ]}
-      />
+    <section id="projects" className="px-6 pb-28 sm:px-10 md:pb-36">
+      <Reveal>
+        <p className="label mb-4">Software projects</p>
+        <h2
+          className="mb-16 max-w-3xl font-display text-[length:var(--step-3)] font-medium leading-[1.06] tracking-[-0.01em]"
+          style={{ fontVariationSettings: "'opsz' 100, 'SOFT' 50" }}
+        >
+          Built from the metal up.
+        </h2>
+      </Reveal>
 
-      <div className="grid gap-5 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-3">
         <Reveal className="md:col-span-2">
           <ProjectCard p={projects[0]} className="h-full" />
         </Reveal>
-        <Reveal delay={0.12}>
+        <Reveal delay={0.1}>
           <ProjectCard p={projects[1]} className="h-full" />
         </Reveal>
         <Reveal>
           <ProjectCard p={projects[2]} className="h-full" />
         </Reveal>
 
-        {/* github profile tile */}
-        <Reveal delay={0.12} className="md:col-span-2">
+        {/* GitHub profile tile */}
+        <Reveal delay={0.1} className="md:col-span-2">
           <motion.a
             href={identity.github}
             target="_blank"
             rel="noopener noreferrer"
             whileHover={{ y: -6 }}
             transition={{ type: "spring", stiffness: 260, damping: 24 }}
-            className="iri-card group flex h-full min-h-[13rem] flex-col justify-between p-7 sm:p-8"
+            className="group relative flex h-full min-h-[13rem] flex-col justify-between overflow-hidden rounded-3xl bg-plum p-7 text-milk sm:p-9"
           >
-            <p className="telemetry">
-              more shenanigans <span className="text-mint">→</span>
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -bottom-20 -right-16 h-64 w-64 rounded-full opacity-40 blur-3xl transition-opacity duration-700 group-hover:opacity-80"
+              style={{
+                background:
+                  "radial-gradient(closest-side, rgb(236 166 73 / 0.5), transparent)",
+              }}
+            />
+            <p className="label label-milk relative">
+              Everything else lives here
             </p>
-            <div className="flex items-end justify-between">
-              <p className="font-display text-3xl uppercase leading-none tracking-tight sm:text-4xl">
-                github
-                <span className="block text-mute transition-colors duration-500 group-hover:text-mint">
-                  /CanyonSkull-OS
-                </span>
-              </p>
-              <span
-                aria-hidden="true"
-                className="font-display text-6xl text-white/15 transition-colors duration-500 group-hover:text-white/40"
-              >
-                ✲
+            <p
+              className="relative font-display text-[length:var(--step-2)] font-medium leading-tight"
+              style={{ fontVariationSettings: "'opsz' 72, 'SOFT' 50" }}
+            >
+              github.com/
+              <span className="text-amber transition-colors duration-500 group-hover:text-milk">
+                CanyonSkull-OS
               </span>
-            </div>
+            </p>
           </motion.a>
         </Reveal>
       </div>

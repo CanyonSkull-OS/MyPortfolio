@@ -1,17 +1,18 @@
-import { Anton, Space_Grotesk, IBM_Plex_Mono } from "next/font/google";
+import { Fraunces, Instrument_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import SmoothScroll from "@/components/SmoothScroll";
+import CustomCursor from "@/components/CustomCursor";
 
-const anton = Anton({
-  weight: "400",
+const fraunces = Fraunces({
   subsets: ["latin"],
-  variable: "--font-anton",
+  variable: "--font-fraunces",
   display: "swap",
+  axes: ["opsz", "SOFT", "WONK"],
 });
 
-const grotesk = Space_Grotesk({
+const instrument = Instrument_Sans({
   subsets: ["latin"],
-  variable: "--font-grotesk",
+  variable: "--font-instrument",
   display: "swap",
 });
 
@@ -25,7 +26,7 @@ const plexMono = IBM_Plex_Mono({
 export const metadata = {
   title: "Omer Shahid — AI & Automation Engineer",
   description:
-    "Computer Science student at FAST-NUCES building lead generation engines, n8n orchestrations and automation systems that work while you sleep.",
+    "Omer Shahid builds automation that runs the repetitive half of a business — lead pipelines, attendance systems, calendar plumbing. CS at FAST-NUCES, Karachi.",
   keywords: [
     "Omer Shahid",
     "automation engineer",
@@ -37,17 +38,19 @@ export const metadata = {
 };
 
 export const viewport = {
-  themeColor: "#050505",
+  themeColor: "#f4efe7",
 };
 
 export default function RootLayout({ children }) {
   return (
     <html
       lang="en"
-      className={`${anton.variable} ${grotesk.variable} ${plexMono.variable}`}
+      className={`${fraunces.variable} ${instrument.variable} ${plexMono.variable}`}
     >
-      <body className="bg-void font-sans text-ink">
+      <body className="bg-base font-sans text-ink">
         <SmoothScroll>{children}</SmoothScroll>
+        <CustomCursor />
+        <div className="grain-overlay" aria-hidden="true" />
       </body>
     </html>
   );

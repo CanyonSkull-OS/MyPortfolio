@@ -1,28 +1,28 @@
-import PaperShaderBackground from "@/components/PaperShaderBackground";
 import Nav from "@/components/Nav";
 import Hero from "@/components/sections/Hero";
 import Journey from "@/components/sections/Journey";
+import Work from "@/components/sections/Work";
 import Projects from "@/components/sections/Projects";
 import Skills from "@/components/sections/Skills";
 import Footer from "@/components/sections/Footer";
 
+/*
+  Composition: plum hero (WebGL) → plum journey (pinned) → cream light acts
+  (work, projects, skills) → plum contact. Full-bleed dark acts, contained
+  light acts — varied rhythm, no fixed background layer.
+*/
 export default function Home() {
   return (
-    <main className="relative min-h-screen w-full bg-[#050505] text-white overflow-x-hidden">
-      {/* LAYER 1: The Integrated Paper Shader Canvas */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <PaperShaderBackground />
-      </div>
-
-      {/* LAYER 2: HTML Content & Interactions */}
-      <div className="relative z-10 mx-auto max-w-7xl">
-        <Nav />
-        <Hero />
-        <Journey />
+    <main className="relative min-h-screen w-full overflow-x-hidden bg-base text-ink">
+      <Nav />
+      <Hero />
+      <Journey />
+      <div className="mx-auto max-w-6xl">
+        <Work />
         <Projects />
         <Skills />
-        <Footer />
       </div>
+      <Footer />
     </main>
   );
 }
