@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
 import { motion, useMotionValue, useSpring, useTransform } from "motion/react";
 import { gsap } from "@/lib/gsapClient";
 import SplitHeading from "@/components/ui/SplitHeading";
 import { work } from "@/lib/data";
+
+// animates on the client only, mirroring the reference <ClientOnly> boundary
+const LeadFeed = dynamic(() => import("@/components/LeadFeed"), { ssr: false });
 
 /*
   Featured work — three engagements as deep, tactile cards. GSAP owns the
@@ -37,7 +41,6 @@ function WorkCard({ item }) {
   return (
     <div data-work-card>
       <motion.article
-        data-cursor="view"
         onPointerMove={onMove}
         onPointerLeave={onLeave}
         whileHover={{ y: -8 }}
@@ -74,6 +77,8 @@ function WorkCard({ item }) {
           </div>
 
           <div className="flex flex-col items-start justify-between gap-8 md:items-end">
+            {/* the BeamHive card gets the live pipeline feed as its visual */}
+            {item.id === "beamhive" && <LeadFeed />}
             <div className="flex flex-wrap gap-2 md:justify-end">
               {item.tags.map((t) => (
                 <span key={t} className="tag">
@@ -131,7 +136,8 @@ export default function Work() {
   }, []);
 
   return (
-    <section id="work" ref={rootRef} className="px-6 pb-20 pt-36 sm:px-10 md:pt-44">
+    // pt clears the seam's dusk band so the heading lands on full cream
+    <section id="work" ref={rootRef} className="px-6 pb-20 pt-[42svh] sm:px-10">
       <p className="label mb-4">Featured work</p>
       <SplitHeading
         className="mb-14 max-w-3xl font-display text-[length:var(--step-3)] font-medium leading-[1.06] tracking-[-0.01em]"

@@ -10,9 +10,9 @@ import Footer from "@/components/sections/Footer";
 
 /*
   Composition: one fixed ink field (BackgroundFlow) runs behind the whole
-  page; the hero paints its own liquid WebGL over it and fades into it; the
-  journey scrolls natively across it; the light middle acts melt in and out
-  through the .light-zone gradient — no hard color seams anywhere.
+  page; the hero paints its CSS gradient field over it and fades into it;
+  the journey scrolls natively across it; the light middle acts melt in and
+  out through the .light-zone gradient — no hard color seams anywhere.
 */
 export default function Home() {
   // overflow-x-clip, not -hidden: hidden creates a scrollport and kills

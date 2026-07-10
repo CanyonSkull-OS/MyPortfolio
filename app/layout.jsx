@@ -1,7 +1,7 @@
 import { Fraunces, Instrument_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import SmoothScroll from "@/components/SmoothScroll";
-import CustomCursor from "@/components/CustomCursor";
+import FluidCursor from "@/components/FluidCursor";
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -49,7 +49,7 @@ export default function RootLayout({ children }) {
     >
       <body className="bg-cream font-sans text-ink">
         <SmoothScroll>{children}</SmoothScroll>
-        <CustomCursor />
+        <FluidCursor />
       </body>
     </html>
   );

@@ -13,7 +13,6 @@ import { projects, identity } from "@/lib/data";
 function ProjectCard({ p, className = "" }) {
   return (
     <motion.article
-      data-cursor="view"
       whileHover={{ y: -6 }}
       transition={{ type: "spring", stiffness: 260, damping: 24 }}
       className={`card-soft group relative flex flex-col justify-between overflow-hidden p-7 sm:p-9 ${className}`}

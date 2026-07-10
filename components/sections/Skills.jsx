@@ -37,7 +37,8 @@ export default function Skills() {
   }, []);
 
   return (
-    <section id="skills" ref={rootRef} className="px-6 pb-28 sm:px-10 md:pb-32">
+    // pb clears the bottom seam so the n8n note stays on full cream
+    <section id="skills" ref={rootRef} className="px-6 pb-[42svh] sm:px-10">
       <p className="label mb-4">Technical skillset</p>
       <SplitHeading
         className="mb-12 max-w-3xl font-display text-[length:var(--step-3)] font-medium leading-[1.06] tracking-[-0.01em]"
@@ -56,7 +57,6 @@ export default function Skills() {
                   <span
                     key={item}
                     className="text-[length:var(--step-1)] text-ink/70 transition-colors duration-300 hover:text-rust"
-                    data-cursor
                   >
                     {item}
                   </span>

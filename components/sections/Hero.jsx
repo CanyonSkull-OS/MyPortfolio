@@ -1,21 +1,18 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import dynamic from "next/dynamic";
 import { gsap, SplitText } from "@/lib/gsapClient";
 import Magnetic from "@/components/ui/Magnetic";
+import HeroBeam from "@/components/HeroBeam";
 import { identity } from "@/lib/data";
 
-const HeroScene = dynamic(() => import("@/components/HeroScene"), {
-  ssr: false,
-});
-
 /*
-  Hero — full-viewport Deep Water field. The CSS .hero-liquid is always
-  painted underneath; HeroScene (liquid glass droplet + fluid flow) mounts
-  over it on capable desktops. Headline is a staggered SplitText char
-  reveal; scroll drifts the content out with damping. The bottom edge fades
-  into the fixed ink field so the hero melts into the journey.
+  Hero — full-viewport Deep Water field, all CSS: the .hero-liquid gradient
+  (static radials + two transform-only drifting glows) replaced the old
+  WebGL droplet scene. The centerpiece is the AnimatedBeam integration
+  graphic. Headline is a staggered SplitText char reveal; scroll drifts the
+  content out with damping. The bottom edge fades into the fixed ink field
+  so the hero melts into the journey.
 */
 export default function Hero() {
   const rootRef = useRef(null);
@@ -75,41 +72,41 @@ export default function Hero() {
     <section
       id="top"
       ref={rootRef}
-      className="hero-liquid relative flex min-h-svh flex-col justify-end overflow-hidden"
+      className="hero-liquid relative flex min-h-svh flex-col overflow-hidden"
     >
-      <HeroScene />
-
-      {/* melt into the ink field below — no hard canvas edge */}
+      {/* melt into the ink field below — no hard edge */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-44 bg-gradient-to-b from-transparent to-ink"
       />
 
+      {/* two columns, both centered in the viewport: the name anchors the
+          left, the beam supports on the right; stacks name-first on mobile */}
       <div
         data-hero-content
-        className="relative z-10 px-6 pb-16 pt-40 sm:px-10 md:pb-20"
+        className="relative z-10 grid flex-1 items-center gap-12 px-6 pb-6 pt-28 sm:px-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-8 lg:pt-24"
       >
-        <p data-hero-fade className="label-cream label mb-6">
-          {identity.role} — {identity.line}
-        </p>
+        <div>
+          <p data-hero-fade className="label-cream label mb-6">
+            {identity.role} — {identity.line}
+          </p>
 
-        <h1
-          data-hero-title
-          className="split-mask max-w-5xl font-display text-[clamp(3.4rem,11vw,9.5rem)] font-medium leading-[0.98] tracking-[-0.02em] text-cream"
-          style={{ fontVariationSettings: "'opsz' 144, 'SOFT' 40, 'WONK' 1" }}
-        >
-          Omer Shahid
-        </h1>
+          <h1
+            data-hero-title
+            className="split-mask font-display text-[clamp(3.4rem,8vw,8.5rem)] font-medium leading-[0.98] tracking-[-0.02em] text-cream"
+            style={{ fontVariationSettings: "'opsz' 144, 'SOFT' 40, 'WONK' 1" }}
+          >
+            Omer Shahid
+          </h1>
 
-        <div className="mt-8 flex flex-wrap items-end justify-between gap-8">
           <p
             data-hero-fade
-            className="max-w-xl text-balance text-[length:var(--step-1)] leading-relaxed text-cream/85"
+            className="mt-8 max-w-xl text-balance text-[length:var(--step-1)] leading-relaxed text-cream/85"
           >
             {identity.valueProp}
           </p>
 
-          <div data-hero-fade className="flex flex-wrap items-center gap-3">
+          <div data-hero-fade className="mt-10 flex flex-wrap items-center gap-3">
             <Magnetic>
               <a href={`mailto:${identity.email}`} className="pill pill-invert">
                 Get in touch
@@ -138,16 +135,20 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* scroll cue — a quiet line, not a gimmick */}
-        <div className="mt-14 flex items-center gap-4">
-          <span
-            data-hero-line
-            className="block h-px w-24 origin-left bg-cream/40"
-          />
-          <span data-hero-fade className="label label-cream">
-            Scroll
-          </span>
+        <div data-hero-fade className="flex justify-center lg:justify-end lg:pr-[2vw]">
+          <HeroBeam />
         </div>
+      </div>
+
+      {/* scroll cue — stays anchored at the hero's bottom edge */}
+      <div className="relative z-10 flex items-center gap-4 px-6 pb-10 sm:px-10">
+        <span
+          data-hero-line
+          className="block h-px w-24 origin-left bg-cream/40"
+        />
+        <span data-hero-fade className="label label-cream">
+          Scroll
+        </span>
       </div>
     </section>
   );
