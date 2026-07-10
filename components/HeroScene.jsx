@@ -11,32 +11,33 @@ import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ScrollTrigger } from "@/lib/gsapClient";
 
 /*
-  HeroScene — the "Warm Signal" centerpiece.
+  HeroScene — the "Deep Water" centerpiece.
 
   One three.js scene, two actors:
-    1. A fullscreen grainient plane (domain-warped fbm, plum → ember → amber)
-       rendered behind everything — the same living gradient as the CSS
-       fallback, but fluid.
-    2. A noise-displaced glass droplet (MeshPhysicalMaterial, transmission +
-       dispersion) floating in front. Because transmission samples the scene
-       render, the droplet genuinely refracts the gradient behind it —
-       background and centerpiece are one optical system.
+    1. A fullscreen liquid plane: double domain-warped fbm flow, banded
+       ink → teal → rust with orange light streaks along the flow ridges.
+       Smooth and wet — no noise texture, no grain.
+    2. A liquid glass droplet (MeshPhysicalMaterial, transmission +
+       dispersion) floating in front. Transmission samples the scene render,
+       so the droplet genuinely refracts the flow behind it.
 
   Interaction contract:
     uniforms.uMouse ← pointermove, lerped in the raf (never 1:1)
     scroll progress ← ScrollTrigger over the hero, drives morph amplitude,
-    droplet drift and gradient hue shift.
+    droplet drift and flow hue shift.
 
-  Polish chain: RoomEnvironment → ACESFilmic → bloom → vignette+grain → output.
+  Polish chain: RoomEnvironment → ACESFilmic → soft bloom → vignette →
+  output. NO film-grain pass.
 
   Guardrails: mounts nothing on touch/small screens, reduced motion, or
-  missing WebGL2 (the CSS .hero-grainient underneath is the fallback).
-  The raf stops when the hero leaves the viewport or the tab hides.
+  low-power hardware (the CSS .hero-liquid underneath is the fallback).
+  DPR capped at 1.5. The raf stops when the hero leaves the viewport or
+  the tab hides.
 */
 
-// ---------------------------------------------------------------- gradient
+// ---------------------------------------------------------------- liquid
 
-const GRADIENT_FRAG = /* glsl */ `
+const LIQUID_FRAG = /* glsl */ `
   precision highp float;
   uniform vec2 uRes;
   uniform float uTime;
@@ -75,40 +76,52 @@ const GRADIENT_FRAG = /* glsl */ `
     float aspect = uRes.x / uRes.y;
     vec2 p = (vUv - 0.5) * vec2(aspect, 1.0);
 
-    float t = uTime * 0.045;
+    float t = uTime * 0.04;
     vec2 m = (uMouse - 0.5) * vec2(aspect, 1.0);
 
-    // domain-warped field, gently pulled toward the cursor
+    // double domain warp — this is what makes it read as flowing liquid
     vec2 q = vec2(
-      fbm(p * 1.15 + t * vec2(0.8, -0.5)),
-      fbm(p * 1.15 + vec2(3.1, 7.7) - t * 0.6)
+      fbm(p * 1.1 + t * vec2(0.7, -0.45)),
+      fbm(p * 1.1 + vec2(3.1, 7.7) - t * 0.55)
     );
-    float pull = exp(-length(p - m) * 2.4) * 0.22;
-    float f = fbm(p * 1.15 + 1.9 * q + pull);
+    float pull = exp(-length(p - m) * 2.4) * 0.24;
+    vec2 r = vec2(
+      fbm(p * 1.4 + 2.3 * q + vec2(1.7, 9.2) + t * 0.3),
+      fbm(p * 1.4 + 2.3 * q + vec2(8.3, 2.8) - t * 0.26)
+    );
+    float f = fbm(p * 1.2 + 2.1 * r + pull);
 
-    // Warm Signal palette — deep plum floor, ember mids, amber blooms
-    vec3 plumDeep = vec3(0.121, 0.055, 0.110);  // #2d1428 (linear-ish)
-    vec3 plum     = vec3(0.220, 0.083, 0.190);
-    vec3 ember    = vec3(0.664, 0.135, 0.040);
-    vec3 amber    = vec3(0.870, 0.420, 0.085);
+    // Deep Water palette (linear-ish, graded through ACES downstream)
+    vec3 ink  = vec3(0.000, 0.008, 0.017);  // #001524
+    vec3 teal = vec3(0.008, 0.120, 0.155);  // #15616D
+    vec3 rust = vec3(0.190, 0.023, 0.005);  // #78290F
+    vec3 orange = vec3(1.000, 0.210, 0.000); // #FF7D00
+    vec3 cream = vec3(1.000, 0.840, 0.650);  // #FFECD1
 
-    float band = f + uScroll * 0.18;
-    vec3 col = mix(plumDeep, plum, smoothstep(0.05, 0.45, band));
-    col = mix(col, ember, smoothstep(0.42, 0.72, band));
-    col = mix(col, amber, smoothstep(0.68, 0.98, band) * 0.85);
+    float band = f + uScroll * 0.16;
+    vec3 col = mix(ink, teal, smoothstep(0.12, 0.52, band));
+    col = mix(col, rust, smoothstep(0.55, 0.85, band));
+
+    // orange light streaks along the flow ridges — thin, glassy, wet
+    float ridge = smoothstep(0.50, 0.60, f) * smoothstep(0.70, 0.60, f);
+    col += orange * ridge * (0.42 + 0.25 * uScroll);
+
+    // secondary specular sheen where the warp field folds
+    float sheen = smoothstep(0.62, 0.78, r.x) * smoothstep(0.95, 0.78, r.x);
+    col += cream * sheen * 0.06;
 
     // soft light well around the cursor
-    col += amber * exp(-length(p - m) * 3.2) * 0.10;
+    col += cream * exp(-length(p - m) * 3.4) * 0.07;
 
-    // breathe darker at the edges so the headline zone stays readable
+    // darken edges so the headline zone stays readable
     float vig = smoothstep(1.5, 0.35, length(vUv - 0.5) * 1.9);
-    col *= 0.62 + 0.38 * vig;
+    col *= 0.6 + 0.4 * vig;
 
     gl_FragColor = vec4(col, 1.0);
   }
 `;
 
-const GRADIENT_VERT = /* glsl */ `
+const LIQUID_VERT = /* glsl */ `
   varying vec2 vUv;
   void main() {
     vUv = uv;
@@ -116,12 +129,11 @@ const GRADIENT_VERT = /* glsl */ `
   }
 `;
 
-// ------------------------------------------------------- vignette + grain
+// ------------------------------------------------------------- vignette
 
-const FINISH_SHADER = {
+const VIGNETTE_SHADER = {
   uniforms: {
     tDiffuse: { value: null },
-    uTime: { value: 0 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -133,21 +145,12 @@ const FINISH_SHADER = {
   fragmentShader: /* glsl */ `
     precision highp float;
     uniform sampler2D tDiffuse;
-    uniform float uTime;
     varying vec2 vUv;
-
-    float hash(vec2 p) {
-      p = fract(p * vec2(123.34, 456.21));
-      p += dot(p, p + 45.32);
-      return fract(p.x * p.y);
-    }
 
     void main() {
       vec4 col = texture2D(tDiffuse, vUv);
       float vig = smoothstep(1.45, 0.4, length(vUv - 0.5) * 1.75);
-      col.rgb *= 0.72 + 0.28 * vig;
-      float grain = hash(vUv * 917.0 + fract(uTime) * 61.7) - 0.5;
-      col.rgb += grain * 0.05;
+      col.rgb *= 0.75 + 0.25 * vig;
       gl_FragColor = col;
     }
   `,
@@ -155,8 +158,9 @@ const FINISH_SHADER = {
 
 // -------------------------------------------- droplet displacement (GLSL)
 
-// Simplex-ish 3D noise + displacement along the normal, with normals
-// recomputed from neighbor samples so refraction stays smooth.
+// Simplex noise + displacement along the normal, with normals recomputed
+// from neighbor samples so refraction stays smooth. Low frequency + slow
+// time so the surface flows like liquid instead of crumpling like rock.
 const DROPLET_GLSL = /* glsl */ `
   uniform float uTime;
   uniform float uAmp;
@@ -209,9 +213,9 @@ const DROPLET_GLSL = /* glsl */ `
 
   vec3 displaced(vec3 pos) {
     vec3 dir = normalize(pos);
-    float n = snoise(dir * 1.35 + vec3(uTime * 0.22, uTime * 0.16, uPointer.x * 0.6));
-    float n2 = snoise(dir * 2.6 - vec3(0.0, uTime * 0.28, uPointer.y * 0.6));
-    return pos + dir * (n * 0.8 + n2 * 0.2) * uAmp;
+    float n = snoise(dir * 1.05 + vec3(uTime * 0.16, uTime * 0.12, uPointer.x * 0.5));
+    float n2 = snoise(dir * 2.0 - vec3(0.0, uTime * 0.2, uPointer.y * 0.5));
+    return pos + dir * (n * 0.85 + n2 * 0.15) * uAmp;
   }
 `;
 
@@ -248,7 +252,7 @@ export default function HeroScene() {
       return; // CSS fallback stays visible
     }
 
-    const dprCap = Math.min(window.devicePixelRatio || 1, 1.75);
+    const dprCap = Math.min(window.devicePixelRatio || 1, 1.5);
     renderer.setPixelRatio(dprCap);
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -263,16 +267,16 @@ export default function HeroScene() {
     );
     camera.position.set(0, 0, 6);
 
-    // warm studio reflections without any external HDR download
+    // studio reflections without any external HDR download
     const pmrem = new THREE.PMREMGenerator(renderer);
     scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
-    const key = new THREE.DirectionalLight(0xffd9a0, 2.2);
+    const key = new THREE.DirectionalLight(0xffe0b8, 2.0);
     key.position.set(3, 4, 5);
     scene.add(key);
 
-    // ---- actor 1: the grainient backdrop --------------------------------
-    const gradientUniforms = {
+    // ---- actor 1: the liquid backdrop -------------------------------------
+    const liquidUniforms = {
       uRes: { value: new THREE.Vector2(1, 1) },
       uTime: { value: 0 },
       uMouse: { value: new THREE.Vector2(0.5, 0.5) },
@@ -281,9 +285,9 @@ export default function HeroScene() {
     const backdrop = new THREE.Mesh(
       new THREE.PlaneGeometry(2, 2),
       new THREE.ShaderMaterial({
-        vertexShader: GRADIENT_VERT,
-        fragmentShader: GRADIENT_FRAG,
-        uniforms: gradientUniforms,
+        vertexShader: LIQUID_VERT,
+        fragmentShader: LIQUID_FRAG,
+        uniforms: liquidUniforms,
         depthWrite: false,
         depthTest: false,
       })
@@ -292,23 +296,26 @@ export default function HeroScene() {
     backdrop.frustumCulled = false;
     scene.add(backdrop);
 
-    // ---- actor 2: the glass droplet --------------------------------------
+    // ---- actor 2: the liquid glass droplet ---------------------------------
     const dropletUniforms = {
       uTime: { value: 0 },
-      uAmp: { value: 0.32 },
+      uAmp: { value: 0.16 },
       uPointer: { value: new THREE.Vector2(0, 0) },
     };
+    // glass, not chrome: refraction must dominate reflection, so the env
+    // contribution stays low and the body tint stays light
     const glass = new THREE.MeshPhysicalMaterial({
       transmission: 1,
-      thickness: 1.6,
-      roughness: 0.06,
-      ior: 1.42,
-      dispersion: 1.6,
-      clearcoat: 0.5,
-      clearcoatRoughness: 0.25,
-      attenuationColor: new THREE.Color("#eca649"),
+      thickness: 1.4,
+      roughness: 0.03,
+      ior: 1.4,
+      dispersion: 1.4,
+      clearcoat: 0.25,
+      clearcoatRoughness: 0.2,
+      specularIntensity: 0.7,
+      attenuationColor: new THREE.Color("#9adbe3"),
       attenuationDistance: 3.5,
-      envMapIntensity: 1.1,
+      envMapIntensity: 0.5,
     });
     glass.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, dropletUniforms);
@@ -336,7 +343,7 @@ export default function HeroScene() {
     droplet.position.set(1.55, 0.1, 0);
     scene.add(droplet);
 
-    // ---- post chain -------------------------------------------------------
+    // ---- post chain: ACES → soft bloom → vignette → output (NO grain) ------
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
 
@@ -345,13 +352,12 @@ export default function HeroScene() {
     composer.addPass(new RenderPass(scene, camera));
     const bloom = new UnrealBloomPass(
       new THREE.Vector2(mount.clientWidth, mount.clientHeight),
-      0.32,
-      0.5,
-      0.82
+      0.3,
+      0.55,
+      0.85
     );
     composer.addPass(bloom);
-    const finish = new ShaderPass(FINISH_SHADER);
-    composer.addPass(finish);
+    composer.addPass(new ShaderPass(VIGNETTE_SHADER));
     composer.addPass(new OutputPass());
 
     // ---- interaction state (everything lerped) ----------------------------
@@ -386,7 +392,7 @@ export default function HeroScene() {
       composer.setSize(w, h);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      gradientUniforms.uRes.value.set(w, h);
+      liquidUniforms.uRes.value.set(w, h);
     };
     resize();
     window.addEventListener("resize", resize);
@@ -408,20 +414,19 @@ export default function HeroScene() {
       state.my += (state.tmy - state.my) * k;
       state.scroll += (state.scrollTarget - state.scroll) * k;
 
-      gradientUniforms.uTime.value = t;
-      gradientUniforms.uMouse.value.set(state.mx, state.my);
-      gradientUniforms.uScroll.value = state.scroll;
+      liquidUniforms.uTime.value = t;
+      liquidUniforms.uMouse.value.set(state.mx, state.my);
+      liquidUniforms.uScroll.value = state.scroll;
 
       dropletUniforms.uTime.value = t;
-      dropletUniforms.uAmp.value = 0.2 + state.scroll * 0.35;
+      dropletUniforms.uAmp.value = 0.16 + state.scroll * 0.28;
       dropletUniforms.uPointer.value.set(state.mx - 0.5, state.my - 0.5);
 
-      droplet.rotation.y = t * 0.12 + (state.mx - 0.5) * 0.5;
-      droplet.rotation.x = (state.my - 0.5) * -0.4 + state.scroll * 0.8;
-      droplet.position.y = 0.1 + Math.sin(t * 0.5) * 0.08 + state.scroll * 1.4;
+      droplet.rotation.y = t * 0.1 + (state.mx - 0.5) * 0.5;
+      droplet.rotation.x = (state.my - 0.5) * -0.4 + state.scroll * 0.7;
+      droplet.position.y = 0.1 + Math.sin(t * 0.45) * 0.09 + state.scroll * 1.4;
       droplet.position.x = 1.55 - state.scroll * 0.6;
 
-      finish.uniforms.uTime.value = t;
       composer.render();
       rafId = requestAnimationFrame(loop);
     };

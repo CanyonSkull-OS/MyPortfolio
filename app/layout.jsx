@@ -38,7 +38,7 @@ export const metadata = {
 };
 
 export const viewport = {
-  themeColor: "#f4efe7",
+  themeColor: "#001524",
 };
 
 export default function RootLayout({ children }) {
@@ -47,10 +47,9 @@ export default function RootLayout({ children }) {
       lang="en"
       className={`${fraunces.variable} ${instrument.variable} ${plexMono.variable}`}
     >
-      <body className="bg-base font-sans text-ink">
+      <body className="bg-cream font-sans text-ink">
         <SmoothScroll>{children}</SmoothScroll>
         <CustomCursor />
-        <div className="grain-overlay" aria-hidden="true" />
       </body>
     </html>
   );

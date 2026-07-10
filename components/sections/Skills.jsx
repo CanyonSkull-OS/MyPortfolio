@@ -2,12 +2,13 @@
 
 import { useEffect, useRef } from "react";
 import Reveal from "@/components/ui/Reveal";
+import SplitHeading from "@/components/ui/SplitHeading";
 import { gsap } from "@/lib/gsapClient";
 import { skills } from "@/lib/data";
 
 /*
   Technical skillset — editorial index rows instead of labeled cards.
-  Each row underlines itself on scroll-in; items brighten on hover.
+  Each row underlines itself on scroll-in; items warm to rust on hover.
   The n8n specialization gets the full-width closing statement.
 */
 export default function Skills() {
@@ -36,16 +37,14 @@ export default function Skills() {
   }, []);
 
   return (
-    <section id="skills" ref={rootRef} className="px-6 pb-28 sm:px-10 md:pb-36">
-      <Reveal>
-        <p className="label mb-4">Technical skillset</p>
-        <h2
-          className="mb-14 max-w-3xl font-display text-[length:var(--step-3)] font-medium leading-[1.06] tracking-[-0.01em]"
-          style={{ fontVariationSettings: "'opsz' 100, 'SOFT' 50" }}
-        >
-          The toolbox, honestly listed.
-        </h2>
-      </Reveal>
+    <section id="skills" ref={rootRef} className="px-6 pb-28 sm:px-10 md:pb-32">
+      <p className="label mb-4">Technical skillset</p>
+      <SplitHeading
+        className="mb-12 max-w-3xl font-display text-[length:var(--step-3)] font-medium leading-[1.06] tracking-[-0.01em]"
+        style={{ fontVariationSettings: "'opsz' 100, 'SOFT' 50" }}
+      >
+        The toolbox, honestly listed.
+      </SplitHeading>
 
       <div>
         {clusters.map((c, ci) => (
@@ -56,7 +55,7 @@ export default function Skills() {
                 {c.items.map((item) => (
                   <span
                     key={item}
-                    className="text-[length:var(--step-1)] text-ink/70 transition-colors duration-300 hover:text-ember"
+                    className="text-[length:var(--step-1)] text-ink/70 transition-colors duration-300 hover:text-rust"
                     data-cursor
                   >
                     {item}
@@ -78,10 +77,10 @@ export default function Skills() {
             <p className="label">{featured.label}</p>
             <div>
               <p
-                className="font-display text-[length:var(--step-3)] font-medium leading-none text-plum"
+                className="font-display text-[length:var(--step-3)] font-medium leading-none text-teal"
                 style={{ fontVariationSettings: "'opsz' 100, 'SOFT' 60" }}
               >
-                n8n<span className="text-ember">.</span>
+                n8n<span className="text-orange">.</span>
               </p>
               <p className="mt-4 max-w-xl leading-relaxed text-mute">
                 {featured.note}

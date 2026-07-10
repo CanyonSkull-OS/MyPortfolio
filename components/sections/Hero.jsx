@@ -11,10 +11,11 @@ const HeroScene = dynamic(() => import("@/components/HeroScene"), {
 });
 
 /*
-  Hero — full-viewport Warm Signal field. The CSS .hero-grainient is always
-  painted underneath; HeroScene (glass droplet + fluid gradient) mounts over
-  it on capable desktops. Headline is a staggered SplitText char reveal;
-  scroll drifts the content out with damping.
+  Hero — full-viewport Deep Water field. The CSS .hero-liquid is always
+  painted underneath; HeroScene (liquid glass droplet + fluid flow) mounts
+  over it on capable desktops. Headline is a staggered SplitText char
+  reveal; scroll drifts the content out with damping. The bottom edge fades
+  into the fixed ink field so the hero melts into the journey.
 */
 export default function Hero() {
   const rootRef = useRef(null);
@@ -74,21 +75,27 @@ export default function Hero() {
     <section
       id="top"
       ref={rootRef}
-      className="hero-grainient relative flex min-h-svh flex-col justify-end overflow-hidden"
+      className="hero-liquid relative flex min-h-svh flex-col justify-end overflow-hidden"
     >
       <HeroScene />
+
+      {/* melt into the ink field below — no hard canvas edge */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-44 bg-gradient-to-b from-transparent to-ink"
+      />
 
       <div
         data-hero-content
         className="relative z-10 px-6 pb-16 pt-40 sm:px-10 md:pb-20"
       >
-        <p data-hero-fade className="label-milk label mb-6">
+        <p data-hero-fade className="label-cream label mb-6">
           {identity.role} — {identity.line}
         </p>
 
         <h1
           data-hero-title
-          className="split-mask max-w-5xl font-display text-[clamp(3.4rem,11vw,9.5rem)] font-medium leading-[0.98] tracking-[-0.02em] text-milk"
+          className="split-mask max-w-5xl font-display text-[clamp(3.4rem,11vw,9.5rem)] font-medium leading-[0.98] tracking-[-0.02em] text-cream"
           style={{ fontVariationSettings: "'opsz' 144, 'SOFT' 40, 'WONK' 1" }}
         >
           Omer Shahid
@@ -97,7 +104,7 @@ export default function Hero() {
         <div className="mt-8 flex flex-wrap items-end justify-between gap-8">
           <p
             data-hero-fade
-            className="max-w-xl text-balance text-[length:var(--step-1)] leading-relaxed text-milk/85"
+            className="max-w-xl text-balance text-[length:var(--step-1)] leading-relaxed text-cream/85"
           >
             {identity.valueProp}
           </p>
@@ -113,7 +120,7 @@ export default function Hero() {
                 href={identity.linkedin}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="pill pill-milk"
+                className="pill pill-cream"
               >
                 LinkedIn
               </a>
@@ -123,7 +130,7 @@ export default function Hero() {
                 href={identity.github}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="pill pill-milk"
+                className="pill pill-cream"
               >
                 GitHub
               </a>
@@ -135,9 +142,9 @@ export default function Hero() {
         <div className="mt-14 flex items-center gap-4">
           <span
             data-hero-line
-            className="block h-px w-24 origin-left bg-milk/40"
+            className="block h-px w-24 origin-left bg-cream/40"
           />
-          <span data-hero-fade className="label label-milk">
+          <span data-hero-fade className="label label-cream">
             Scroll
           </span>
         </div>
