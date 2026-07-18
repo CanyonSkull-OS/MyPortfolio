@@ -89,6 +89,24 @@ html.lenis body {
   border: 1px solid rgb(255 236 209 / 0.14);
 }
 
+/*
+  .shell — the one content container. Every section wraps its content in
+  this so left/right edges line up across the whole page at every width
+  (matches px-6 sm:px-10 gutters + max-w-6xl cap). Section elements stay
+  full-bleed for their backgrounds; only the inner content is constrained.
+*/
+.shell {
+  width: 100%;
+  max-width: 72rem; /* = max-w-6xl */
+  margin-inline: auto;
+  padding-inline: 1.5rem; /* = px-6 */
+}
+@media (min-width: 640px) {
+  .shell {
+    padding-inline: 2.5rem; /* = sm:px-10 */
+  }
+}
+
 /* soft-shadow card on the cream base */
 .card-soft {
   border-radius: 1.5rem;

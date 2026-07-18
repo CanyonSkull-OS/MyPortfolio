@@ -5,3 +5,9 @@ Game art credits (both CC0 / public domain):
 
 - Kenney Roguelike/RPG pack (terrain.png)
   https://kenney.nl/assets/roguelike-rpg-pack
+
+Music:
+
+- "Heat" by Zambolino (music.mp3)
+  Free-to-use track via freetouse.com — check attribution terms for
+  public/deployed use.

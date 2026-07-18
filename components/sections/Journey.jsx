@@ -116,10 +116,10 @@ export default function Journey() {
     <section
       id="journey"
       ref={rootRef}
-      className="relative px-6 py-20 text-cream sm:px-10 md:py-24"
+      className="relative py-20 text-cream md:py-24"
     >
       {/* atmosphere comes from the fixed BackgroundFlow layer behind */}
-      <div className="relative">
+      <div className="shell relative">
         <p className="label label-cream mb-10">The journey</p>
 
         <h2
@@ -134,7 +134,7 @@ export default function Journey() {
           ))}
         </h2>
 
-        <div className="grid md:grid-cols-[0.75fr_1.25fr] md:gap-12">
+        <div className="grid md:grid-cols-[12rem_1fr] md:gap-10">
           {/* sticky year rail */}
           <div className="max-md:hidden">
             <div className="sticky top-[22vh]">

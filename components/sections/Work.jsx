@@ -137,7 +137,7 @@ export default function Work() {
 
   return (
     // pt clears the seam's dusk band so the heading lands on full cream
-    <section id="work" ref={rootRef} className="px-6 pb-20 pt-[42svh] sm:px-10">
+    <section id="work" ref={rootRef} className="shell pb-20 pt-[42svh]">
       <p className="label mb-4">Featured work</p>
       <SplitHeading
         className="mb-14 max-w-3xl font-display text-[length:var(--step-3)] font-medium leading-[1.06] tracking-[-0.01em]"

@@ -28,6 +28,12 @@ const ATTACK_CD = 0.3;
 const COMBO_WINDOW = 3;
 const HI_KEY = "omer-arcade-hi";
 
+// ranged fireball + regenerating mana
+const FIRE_CD = 0.4;
+const FIRE_COST = 34;
+const MANA_MAX = 100;
+const MANA_REGEN = 20; // points per second
+
 // idle: the standing anim shown when a mob is paused or pressed against
 // a wall (slugs only have the one anim — it reads as idling anyway)
 const MOB_TYPES = {
@@ -50,10 +56,16 @@ export function buildGame(k, synth, bridge, { world, baked }) {
   const CREAM = hex("#ffecd1");
   const ORANGE = hex("#ff7d00");
   const INK = hex("#001524");
+  const MANA_ON = hex("#2f8291");
+  const MANA_OFF = hex("#0c3f4a");
+  const EMBER = hex("#ffa64d");
   const setCam = (v) => (k.setCamPos ? k.setCamPos(v) : k.camPos(v));
 
   k.setBackground(hex("#001524"));
-  k.loadFont("pixel", "/game/pixel.ttf");
+  // NOTE: the pixel font is preloaded as a browser FontFace ("pixel") in
+  // GameMode BEFORE this runs, so kaplay renders it straight through
+  // ctx.font. Loading it via kaplay's own atlas raced the first frame and
+  // left blank (black-box) text on some Press Starts — do not re-add it.
   k.loadSprite("world", baked.url);
   loadDungeonSprites(k);
   k.loadSpriteAtlas("/game/terrain.png", {
@@ -86,6 +98,8 @@ export function buildGame(k, synth, bridge, { world, baked }) {
       facing: k.vec2(0, 1),
       region: null,
       bossDown: false,
+      mana: MANA_MAX,
+      castAt: -99,
       hi: Number(localStorage.getItem(HI_KEY) || 0),
     };
 
@@ -96,6 +110,7 @@ export function buildGame(k, synth, bridge, { world, baked }) {
         k.pos(c.x, c.y),
         k.area({ shape: new k.Rect(k.vec2(0, 0), c.w, c.h) }),
         k.body({ isStatic: true }),
+        "wall", // so fireballs burst on impact
       ]);
     }
 
@@ -230,6 +245,11 @@ export function buildGame(k, synth, bridge, { world, baked }) {
     const heartsUI = [0, 1, 2].map((i) =>
       k.add([k.sprite("heart-full"), k.pos(8 + i * 15, 7), k.fixed(), k.z(100)])
     );
+    // mana bar to the right of the hearts (teal = fireball fuel)
+    k.add([k.rect(52, 8), k.pos(58, 9), k.fixed(), k.z(99), k.color(INK), k.opacity(0.55)]);
+    const manaFill = k.add([
+      k.rect(48, 4), k.pos(60, 11), k.fixed(), k.z(100), k.color(MANA_ON),
+    ]);
     const scoreUI = k.add([
       ptext("SCORE 0"),
       k.pos(8, 26), k.fixed(), k.z(100), k.color(CREAM),
@@ -545,16 +565,15 @@ export function buildGame(k, synth, bridge, { world, baked }) {
     });
 
     /* ---------------- combat ---------------- */
-    function damageMob(mob) {
-      mob.hp -= 1;
-      synth.play("hit");
-      k.shake(3);
-      mob.knock = mob.pos.sub(player.pos).unit().scale(190);
+    function hurtMob(mob, amount, fromPos) {
+      mob.hp -= amount;
+      mob.knock = mob.pos.sub(fromPos).unit().scale(amount >= 2 ? 210 : 190);
       const s0 = mob.scale.x;
       k.tween(s0 * 1.22, s0, 0.15, (v) => mob.scaleTo(v));
       if (mob.hp <= 0) killMob(mob);
     }
 
+    // melee — LEFT MOUSE BUTTON; sweeps the sword arc in the facing dir
     function attack() {
       const now = k.time();
       if (now - state.attackAt < ATTACK_CD || state.paused || state.over) return;
@@ -572,6 +591,7 @@ export function buildGame(k, synth, bridge, { world, baked }) {
         });
 
       // direct arc check — a collision-object hitbox proved unreliable
+      let landed = false;
       for (const mob of k.get("mob")) {
         const to = mob.pos.sub(player.pos);
         const reach = 46 + (mob.type === "boss" ? 16 : 0);
@@ -580,9 +600,79 @@ export function buildGame(k, synth, bridge, { world, baked }) {
         // must be roughly in front, unless point-blank (16 ≈ contact range,
         // so a mob chewing on your back is always hittable)
         if (d > 16 && to.unit().dot(dir) < 0.2) continue;
-        damageMob(mob);
+        hurtMob(mob, 1, player.pos);
+        landed = true;
+      }
+      if (landed) {
+        synth.play("hit");
+        k.shake(3);
       }
     }
+
+    // fireball — SPACE; ranged, spends mana, bursts on impact with AoE
+    function fireball() {
+      const now = k.time();
+      if (state.paused || state.over || now - state.castAt < FIRE_CD) return;
+      if (state.mana < FIRE_COST) {
+        synth.play("nomana");
+        return;
+      }
+      state.mana -= FIRE_COST;
+      state.castAt = now;
+      synth.play("fireball");
+
+      const dir = state.facing.unit();
+      const ball = k.add([
+        k.circle(4),
+        k.pos(player.pos.sub(0, 10).add(dir.scale(12))),
+        k.anchor("center"),
+        k.color(ORANGE),
+        k.area({ shape: new k.Rect(k.vec2(-4, -4), 8, 8) }),
+        k.z(1200),
+        "fireball",
+        { dir, born: now },
+      ]);
+      ball.add([k.circle(7), k.anchor("center"), k.color(ORANGE), k.opacity(0.3)]);
+      ball.onUpdate(() => {
+        if (state.paused || state.over) return;
+        ball.move(dir.scale(240));
+        k.add([
+          k.circle(3), k.pos(ball.pos), k.anchor("center"),
+          k.color(EMBER), k.opacity(0.5), k.z(1150),
+          k.lifespan(0.02, { fade: 0.22 }),
+        ]);
+        if (k.time() - ball.born > 1.2) {
+          explode(ball.pos);
+          ball.destroy();
+        }
+      });
+    }
+
+    function explode(pos) {
+      synth.play("explosion");
+      k.shake(5);
+      poof(pos, "#ff7d00", 14);
+      const ring = k.add([
+        k.circle(6), k.pos(pos), k.anchor("center"),
+        k.color(ORANGE), k.opacity(0.6), k.z(1300),
+      ]);
+      k.tween(6, 30, 0.22, (r) => (ring.radius = r), k.easings.easeOutQuad);
+      k.tween(0.6, 0, 0.28, (o) => (ring.opacity = o)).then(() => ring.destroy());
+      for (const mob of k.get("mob")) {
+        if (mob.pos.dist(pos) <= 30) hurtMob(mob, 3, pos);
+      }
+    }
+
+    k.onCollide("fireball", "mob", (ball) => {
+      if (!ball.exists()) return;
+      explode(ball.pos);
+      ball.destroy();
+    });
+    k.onCollide("fireball", "wall", (ball) => {
+      if (!ball.exists()) return;
+      explode(ball.pos);
+      ball.destroy();
+    });
 
     k.onCollide("player", "mob", (p, mob) => {
       if (state.paused || state.over) return;
@@ -651,14 +741,20 @@ export function buildGame(k, synth, bridge, { world, baked }) {
       }
 
       if (bridge.takeTouchAttack()) attack();
+      if (bridge.takeTouchFire()) fireball();
+
+      // mana regenerates over time; bar dims when a cast is unaffordable
+      state.mana = Math.min(MANA_MAX, state.mana + MANA_REGEN * k.dt());
+      manaFill.width = Math.max(0, 48 * (state.mana / MANA_MAX));
+      manaFill.color = state.mana >= FIRE_COST ? MANA_ON : MANA_OFF;
 
       const cx = Math.max(320, Math.min(player.pos.x, WORLD.W * 16 - 320));
       const cy = Math.max(180, Math.min(player.pos.y, WORLD.H * 16 - 180));
       setCam(k.vec2(cx, cy));
     });
 
-    k.onKeyPress("space", attack);
-    k.onKeyPress("j", attack);
+    k.onMousePress("left", attack); // melee = left click
+    k.onKeyPress("space", fireball); // ranged = space
     // M (mute) is handled by the DOM layer so the button icon stays in sync
     k.onKeyPress("escape", () => {
       if (state.paused) return; // panel open — GameMode handles closing
@@ -718,10 +814,13 @@ export function buildGame(k, synth, bridge, { world, baked }) {
       pos: () => ({ x: player.pos.x, y: player.pos.y }),
       score: () => state.score,
       hearts: () => state.hearts,
+      mana: () => Math.round(state.mana),
       fps: () => k.debug.fps(),
       paused: () => state.paused,
       over: () => state.over,
       arrow: () => showArrow,
+      melee: () => attack(),
+      fire: () => fireball(),
       mobs: () =>
         k.get("mob").map((m) => ({ x: Math.round(m.pos.x), y: Math.round(m.pos.y), t: m.type })),
     };

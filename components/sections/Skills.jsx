@@ -38,7 +38,7 @@ export default function Skills() {
 
   return (
     // pb clears the bottom seam so the n8n note stays on full cream
-    <section id="skills" ref={rootRef} className="px-6 pb-[42svh] sm:px-10">
+    <section id="skills" ref={rootRef} className="shell pb-[42svh]">
       <p className="label mb-4">Technical skillset</p>
       <SplitHeading
         className="mb-12 max-w-3xl font-display text-[length:var(--step-3)] font-medium leading-[1.06] tracking-[-0.01em]"

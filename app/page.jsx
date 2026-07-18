@@ -27,11 +27,9 @@ export default function Home() {
         <Hero />
         <Journey />
         <div className="light-zone relative">
-          <div className="mx-auto max-w-6xl">
-            <Work />
-            <Projects />
-            <Skills />
-          </div>
+          <Work />
+          <Projects />
+          <Skills />
         </div>
         <Footer />
       </div>

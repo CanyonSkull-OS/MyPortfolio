@@ -84,7 +84,7 @@ export default function Hero() {
           left, the beam supports on the right; stacks name-first on mobile */}
       <div
         data-hero-content
-        className="relative z-10 grid flex-1 items-center gap-12 px-6 pb-6 pt-28 sm:px-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-8 lg:pt-24"
+        className="shell relative z-10 grid flex-1 items-center gap-12 pb-6 pt-28 lg:grid-cols-[1.1fr_0.9fr] lg:gap-8 lg:pt-24"
       >
         <div>
           <p data-hero-fade className="label-cream label mb-6">
@@ -150,7 +150,7 @@ export default function Hero() {
       </div>
 
       {/* scroll cue — stays anchored at the hero's bottom edge */}
-      <div className="relative z-10 flex items-center gap-4 px-6 pb-10 sm:px-10">
+      <div className="shell relative z-10 flex items-center gap-4 pb-10">
         <span
           data-hero-line
           className="block h-px w-24 origin-left bg-cream/40"

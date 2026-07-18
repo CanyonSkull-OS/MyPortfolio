@@ -14,9 +14,9 @@ export default function Footer() {
   return (
     <footer
       id="contact"
-      className="relative px-6 pb-10 pt-28 text-cream sm:px-10 md:pt-36"
+      className="relative pb-10 pt-28 text-cream md:pt-36"
     >
-      <div className="relative">
+      <div className="shell relative">
         <Reveal>
           <p className="label label-cream mb-8">
             Open to internships and automation contracts

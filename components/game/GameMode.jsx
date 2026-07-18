@@ -16,11 +16,13 @@ export default function GameMode({ onExit }) {
   const synthRef = useRef(null);
   const touchDir = useRef({ x: 0, y: 0 });
   const touchAttack = useRef(false);
+  const touchFire = useRef(false);
   const [ready, setReady] = useState(false);
   const [panel, setPanel] = useState(null);
   const [gameOver, setGameOver] = useState(null);
   const [muted, setMuted] = useState(false);
   const [isTouch, setIsTouch] = useState(false);
+  const [portrait, setPortrait] = useState(false);
 
   useEffect(() => {
     setIsTouch(window.matchMedia("(pointer: coarse)").matches);
@@ -38,6 +40,30 @@ export default function GameMode({ onExit }) {
           import("./content"),
         ]);
       if (destroyed || !canvasRef.current) return;
+
+      // Preload the pixel font BEFORE kaplay boots. face.load() only readies
+      // the FontFace object — the canvas 2D subsystem can still miss it on the
+      // first draw, and kaplay caches those blank glyphs permanently (the
+      // black-box labels that needed a reload). So we also: (1) fonts.load()
+      // the exact px sizes kaplay renders, (2) await fonts.ready, and (3) force
+      // a real fillText warm-up so the glyphs are cached before any game text.
+      try {
+        const face = new FontFace("pixel", "url(/game/pixel.ttf)");
+        await face.load();
+        document.fonts.add(face);
+        await Promise.all([
+          document.fonts.load("8px pixel"),
+          document.fonts.load("16px pixel"),
+        ]);
+        await document.fonts.ready;
+        const warm = document.createElement("canvas").getContext("2d");
+        if (warm) {
+          warm.font = "16px pixel";
+          warm.fillText("ABCabc0123·×>", 0, 20);
+          warm.font = "8px pixel";
+          warm.fillText("ABCabc0123·×>", 0, 20);
+        }
+      } catch {}
 
       // bake the whole static map into one texture before the engine boots
       const world = buildWorld();
@@ -73,6 +99,11 @@ export default function GameMode({ onExit }) {
           takeTouchAttack: () => {
             const q = touchAttack.current;
             touchAttack.current = false;
+            return q;
+          },
+          takeTouchFire: () => {
+            const q = touchFire.current;
+            touchFire.current = false;
             return q;
           },
         },
@@ -119,6 +150,30 @@ export default function GameMode({ onExit }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panel]);
 
+  // mobile: the arcade is built for landscape. Track orientation to show a
+  // rotate prompt in portrait, and best-effort lock to landscape (works on
+  // Android Chrome; iOS Safari ignores orientation lock, so the prompt is
+  // the dependable fallback).
+  useEffect(() => {
+    if (!isTouch) return;
+    const mq = window.matchMedia("(orientation: portrait)");
+    const sync = () => setPortrait(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    (async () => {
+      try {
+        await document.documentElement.requestFullscreen?.();
+        await window.screen?.orientation?.lock?.("landscape");
+      } catch {}
+    })();
+    return () => {
+      mq.removeEventListener("change", sync);
+      try {
+        window.screen?.orientation?.unlock?.();
+      } catch {}
+    };
+  }, [isTouch]);
+
   // KAPLAY listens on the canvas: refocus it after any DOM interaction
   // or the keyboard goes dead until the player clicks the game again
   const refocusCanvas = () => requestAnimationFrame(() => canvasRef.current?.focus());
@@ -162,8 +217,8 @@ export default function GameMode({ onExit }) {
         </div>
       )}
 
-      {/* top controls */}
-      <div className="absolute right-4 top-4 flex items-center gap-2">
+      {/* top controls — above the rotate overlay so exit stays reachable */}
+      <div className="absolute right-4 top-4 z-[70] flex items-center gap-2">
         <button
           onClick={toggleMute}
           className="pill pill-cream !px-3 !py-2 text-sm"
@@ -179,7 +234,7 @@ export default function GameMode({ onExit }) {
       {/* desktop hint — top center, clear of the canvas objective text */}
       {!isTouch && (
         <p className="game-pixel pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] text-cream/60">
-          WASD MOVE · SPACE SWING · E READ/CLOSE · M MUTE · ESC EXIT
+          WASD MOVE · LMB SWORD · SPACE FIREBALL · E READ · ESC EXIT
         </p>
       )}
 
@@ -278,11 +333,34 @@ export default function GameMode({ onExit }) {
               e.preventDefault();
               touchAttack.current = true;
             }}
-            aria-label="Attack"
+            aria-label="Sword attack"
           >
             ⚔️
           </button>
+          <button
+            className="game-dbtn absolute bottom-28 right-12 !h-14 !w-14 !rounded-full !text-lg"
+            onPointerDown={(e) => {
+              e.preventDefault();
+              touchFire.current = true;
+            }}
+            aria-label="Cast fireball"
+          >
+            🔥
+          </button>
         </>
+      )}
+
+      {/* mobile: rotate-to-landscape prompt */}
+      {isTouch && portrait && (
+        <div className="absolute inset-0 z-[65] grid place-items-center bg-ink p-8 text-center">
+          <div className="game-pixel text-cream">
+            <p className="mb-4 text-4xl">↻</p>
+            <p className="text-sm leading-relaxed">ROTATE YOUR DEVICE</p>
+            <p className="mt-3 text-[10px] leading-relaxed text-cream/60">
+              THIS ADVENTURE PLAYS IN LANDSCAPE
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );

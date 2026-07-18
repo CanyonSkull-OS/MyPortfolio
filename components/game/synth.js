@@ -66,10 +66,30 @@ export function createSynth() {
   }
 
   const sfx = {
-    slash: () => noise({ dur: 0.08, peak: 0.12, freq: 2600, to: 700, q: 0.9 }),
+    slash: () => {
+      // airy blade whoosh with a touch of tonal body for weight
+      noise({ dur: 0.08, peak: 0.12, freq: 2600, to: 700, q: 0.9 });
+      tone({ type: "triangle", from: 880, to: 380, dur: 0.06, peak: 0.05 });
+    },
     hit: () => {
-      tone({ type: "square", from: 160, to: 60, dur: 0.09, peak: 0.16 });
-      noise({ dur: 0.05, peak: 0.08, freq: 900, to: 300 });
+      tone({ type: "square", from: 170, to: 55, dur: 0.09, peak: 0.17 });
+      noise({ dur: 0.05, peak: 0.09, freq: 900, to: 280 });
+    },
+    fireball: () => {
+      // rising airy whoosh + a low sizzling body as it leaves the hand
+      noise({ dur: 0.3, peak: 0.1, freq: 320, to: 1900, q: 0.6 });
+      tone({ type: "sawtooth", from: 200, to: 90, dur: 0.3, peak: 0.09 });
+    },
+    explosion: () => {
+      // deep body drop + broadband boom + a short square crack
+      tone({ type: "triangle", from: 130, to: 42, dur: 0.4, peak: 0.22 });
+      noise({ dur: 0.34, peak: 0.2, freq: 900, to: 130, q: 0.5 });
+      tone({ type: "square", from: 90, to: 50, dur: 0.18, peak: 0.1, delay: 0.02 });
+    },
+    nomana: () => {
+      // two short descending buzzes — "not enough"
+      tone({ type: "square", from: 180, to: 120, dur: 0.1, peak: 0.08 });
+      tone({ type: "square", from: 130, to: 90, dur: 0.12, peak: 0.07, delay: 0.09 });
     },
     kill: () => {
       tone({ type: "square", from: 340, to: 640, dur: 0.07, peak: 0.12 });

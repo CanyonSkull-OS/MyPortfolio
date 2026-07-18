@@ -65,7 +65,7 @@ function ProjectCard({ p, className = "" }) {
 
 export default function Projects() {
   return (
-    <section id="projects" className="px-6 pb-24 sm:px-10 md:pb-28">
+    <section id="projects" className="shell pb-24 md:pb-28">
       <p className="label mb-4">Software projects</p>
       <SplitHeading
         className="mb-14 max-w-3xl font-display text-[length:var(--step-3)] font-medium leading-[1.06] tracking-[-0.01em]"
