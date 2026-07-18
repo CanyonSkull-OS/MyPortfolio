@@ -1,6 +1,7 @@
 import Nav from "@/components/Nav";
 import BackgroundFlow from "@/components/BackgroundFlow";
 import ScrollProgress from "@/components/ScrollProgress";
+import GameLauncher from "@/components/game/GameLauncher";
 import Hero from "@/components/sections/Hero";
 import Journey from "@/components/sections/Journey";
 import Work from "@/components/sections/Work";
@@ -34,6 +35,7 @@ export default function Home() {
         </div>
         <Footer />
       </div>
+      <GameLauncher />
     </main>
   );
 }

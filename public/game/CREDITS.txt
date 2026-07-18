@@ -1,0 +1,7 @@
+Game art credits (both CC0 / public domain):
+
+- 0x72 DungeonTileset II v1.7 (dungeon.png)
+  https://0x72.itch.io/dungeontileset-ii
+
+- Kenney Roguelike/RPG pack (terrain.png)
+  https://kenney.nl/assets/roguelike-rpg-pack

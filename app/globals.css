@@ -158,6 +158,91 @@ html.lenis body {
   color: var(--color-ink);
 }
 
+/* arcade CTA — the one loud button on the site */
+.pill-start {
+  background: var(--color-orange);
+  border-color: transparent;
+  color: var(--color-ink);
+  font-weight: 600;
+}
+.pill-start:hover {
+  background: var(--color-cream);
+  color: var(--color-ink);
+}
+
+/* game-mode pixel UI */
+@font-face {
+  font-family: "GamePixel";
+  src: url("/game/pixel.ttf") format("truetype");
+  font-display: swap;
+}
+.game-card {
+  background: var(--color-ink);
+  border: 3px solid var(--color-cream);
+  box-shadow:
+    0 0 0 3px var(--color-ink),
+    0 0 0 6px var(--color-teal),
+    10px 10px 0 6px rgb(0 21 36 / 0.6);
+  border-radius: 0;
+  color: var(--color-cream);
+}
+.game-pixel {
+  font-family: "GamePixel", monospace;
+  letter-spacing: 0.02em;
+  line-height: 1.6;
+}
+.game-tag {
+  font-family: "GamePixel", monospace;
+  font-size: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border: 2px solid rgb(255 236 209 / 0.35);
+  color: rgb(255 236 209 / 0.85);
+  white-space: nowrap;
+}
+.game-btn {
+  font-family: "GamePixel", monospace;
+  font-size: 0.6rem;
+  padding: 0.6rem 0.9rem;
+  border: 2px solid var(--color-cream);
+  background: var(--color-cream);
+  color: var(--color-ink);
+  box-shadow: 3px 3px 0 0 var(--color-teal);
+  transition: transform 0.05s;
+}
+.game-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 0 var(--color-teal);
+}
+.game-btn-ghost {
+  background: transparent;
+  color: var(--color-cream);
+}
+.game-btn-orange {
+  background: var(--color-orange);
+  border-color: var(--color-orange);
+}
+
+/* game-mode touch buttons */
+.game-dbtn {
+  display: grid;
+  place-items: center;
+  height: 3rem;
+  width: 3rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgb(255 236 209 / 0.3);
+  background: rgb(255 236 209 / 0.12);
+  color: var(--color-cream);
+  font-size: 0.9rem;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.game-dbtn:active {
+  background: rgb(255 125 0 / 0.5);
+}
+
 /* mono tech-tag — the ONE surviving monospace accent */
 .tag {
   font-family: var(--font-mono);

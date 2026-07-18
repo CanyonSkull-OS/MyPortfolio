@@ -108,6 +108,15 @@ export default function Hero() {
 
           <div data-hero-fade className="mt-10 flex flex-wrap items-center gap-3">
             <Magnetic>
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new Event("game:launch"))}
+                className="pill pill-start"
+              >
+                ▶ Press Start
+              </button>
+            </Magnetic>
+            <Magnetic>
               <a href={`mailto:${identity.email}`} className="pill pill-invert">
                 Get in touch
               </a>
