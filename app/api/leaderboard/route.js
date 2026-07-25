@@ -31,9 +31,13 @@ const RL_WINDOW = 600; // ...per this many seconds, per IP
 const NAME_MAX = 12;
 const SCORE_MAX = 5_000_000;
 const WAVE_MAX = 500;
-// score can't exceed this for the claimed wave - a wave-3 run posting 200k
-// is a forgery. Tuned above the arena's real ceiling so honest runs pass.
-const plausibleCeiling = (wave) => wave * 3000 + 2000;
+// Score can't exceed this for the claimed wave — a wave-2 run posting 500k is
+// a forgery. Max real score grows ~quadratically with wave (per-wave mob count,
+// the score multiplier, and up to a 4x combo all compound), so a LINEAR ceiling
+// wrongly rejects deep legit runs. This quadratic bound sits safely above the
+// theoretical max at every wave (verified against the arena's wave design)
+// while still catching absurd forgeries.
+const plausibleCeiling = (wave) => 1300 * wave * wave + 2000 * wave + 6000;
 
 // small, conservative list - a full filter is overkill for 12 chars, but the
 // board sits on a portfolio a recruiter may read, so block the obvious.
