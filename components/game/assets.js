@@ -215,6 +215,99 @@ export async function bakeWorld(world) {
   return { url: cv.toDataURL(), colliders, monumentSpots };
 }
 
+/*
+  Bakes the endless-arena floor: a 40×22 walled room (deliberately just under
+  the 640×360 viewport, so the camera stays static — no scroll, no clamp
+  maths, and a far cheaper bake than the overworld). Ink-washed grey ground,
+  a 2-tile rock wall ring, and four 2×2 pillars for cover. Returns:
+    { url, colliders:[{x,y,w,h}px], W, H,
+      playerSpawn:{x,y}px, alcoves:[[tx,ty]…] } — alcoves are mob spawn tiles.
+*/
+export async function bakeArena() {
+  const terrain = await loadImage("/game/terrain.png");
+  const AW = 40;
+  const AH = 22;
+  const cv = document.createElement("canvas");
+  cv.width = AW * T;
+  cv.height = AH * T;
+  const g = cv.getContext("2d");
+  g.imageSmoothingEnabled = false;
+
+  const rnd = seededRand(20260724);
+  const stamp = (pick, dx, dy) => {
+    const [c, r] = pick;
+    g.drawImage(terrain, c * K, r * K, T, T, dx * T, dy * T, T, T);
+  };
+  const pickVariant = (arr) => arr[Math.floor(rnd() * arr.length)];
+
+  // solids: a 2-tile wall ring + four 2×2 pillars
+  const solid = [];
+  for (let y = 0; y < AH; y++) solid.push(new Array(AW).fill(false));
+  for (let y = 0; y < AH; y++) {
+    for (let x = 0; x < AW; x++) {
+      if (x < 2 || x >= AW - 2 || y < 2 || y >= AH - 2) solid[y][x] = true;
+    }
+  }
+  const pillars = [[11, 7], [27, 7], [11, 14], [27, 14]];
+  for (const [px, py] of pillars) {
+    for (let dy = 0; dy < 2; dy++) {
+      for (let dx = 0; dx < 2; dx++) solid[py + dy][px + dx] = true;
+    }
+  }
+
+  // ground: grey, dithered, with an ink wash so it reads apart from every
+  // story region
+  for (let y = 0; y < AH; y++) {
+    for (let x = 0; x < AW; x++) stamp(pickVariant(TER.grey), x, y);
+  }
+  g.fillStyle = "rgba(0,21,36,0.34)";
+  g.fillRect(0, 0, cv.width, cv.height);
+
+  // walls + pillars: soft drop shadow then a rock/mound prop
+  for (let y = 0; y < AH; y++) {
+    for (let x = 0; x < AW; x++) {
+      if (!solid[y][x]) continue;
+      g.fillStyle = "rgba(0,21,36,0.35)";
+      g.fillRect(x * T + 1, y * T + 10, 14, 5);
+      stamp(rnd() < 0.5 ? TER.rock : TER.mound, x, y);
+    }
+  }
+
+  // darken the interior edge that faces the wall, for a lit-pit feel
+  g.fillStyle = "rgba(0,21,36,0.28)";
+  for (let y = 2; y < AH - 2; y++) {
+    for (let x = 2; x < AW - 2; x++) {
+      if (x === 2) g.fillRect(x * T, y * T, 3, T);
+      if (x === AW - 3) g.fillRect(x * T + T - 3, y * T, 3, T);
+      if (y === 2) g.fillRect(x * T, y * T, T, 3);
+      if (y === AH - 3) g.fillRect(x * T, y * T + T - 3, T, 3);
+    }
+  }
+
+  const colliders = mergeColliders(solid, AW, AH).map((r) => ({
+    x: r.x * T,
+    y: r.y * T,
+    w: r.w * T,
+    h: r.h * T,
+  }));
+
+  // spawn alcoves: four corners, four mid-edges — all interior floor, clear
+  // of the pillars and the central player spawn
+  const alcoves = [
+    [6, 5], [33, 5], [6, 16], [33, 16],
+    [20, 3], [20, 18], [3, 11], [36, 11],
+  ];
+
+  return {
+    url: cv.toDataURL(),
+    colliders,
+    W: AW,
+    H: AH,
+    playerSpawn: { x: 20 * T + 8, y: 11 * T + 14 },
+    alcoves,
+  };
+}
+
 /* ---- 0x72 atlas → kaplay loadSpriteAtlas entries ---- */
 
 // name → [atlasKey, animSpeed] ; frames are horizontally contiguous

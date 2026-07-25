@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { gsap, SplitText } from "@/lib/gsapClient";
 import Magnetic from "@/components/ui/Magnetic";
 import HeroBeam from "@/components/HeroBeam";
+import ArcadeLeaderboard from "@/components/ArcadeLeaderboard";
 import { identity } from "@/lib/data";
 
 /*
@@ -142,6 +143,8 @@ export default function Hero() {
               </a>
             </Magnetic>
           </div>
+
+          <ArcadeLeaderboard />
         </div>
 
         <div data-hero-fade className="flex justify-center lg:justify-end lg:pr-[2vw]">

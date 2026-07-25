@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@upstash/redis": "^1.38.0",
     "gsap": "^3.13.0",
     "kaplay": "^3001.0.19",
     "lenis": "^1.3.4",

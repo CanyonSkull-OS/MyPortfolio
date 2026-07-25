@@ -23,6 +23,12 @@ export default function GameMode({ onExit }) {
   const [muted, setMuted] = useState(false);
   const [isTouch, setIsTouch] = useState(false);
   const [portrait, setPortrait] = useState(false);
+  const [mode, setMode] = useState("story"); // "story" | "arena"
+  const [name, setName] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("omer-arcade-name") || "" : ""
+  );
+  // leaderboard submit: null | "sending" | { ok, rank, entries } | { error }
+  const [submit, setSubmit] = useState(null);
 
   useEffect(() => {
     setIsTouch(window.matchMedia("(pointer: coarse)").matches);
@@ -31,14 +37,19 @@ export default function GameMode({ onExit }) {
     let destroyed = false;
 
     (async () => {
-      const [{ default: kaplay }, { createSynth }, { buildGame }, { bakeWorld }, { buildWorld }] =
-        await Promise.all([
-          import("kaplay"),
-          import("./synth"),
-          import("./engine"),
-          import("./assets"),
-          import("./content"),
-        ]);
+      const [
+        { default: kaplay },
+        { createSynth },
+        { buildGame },
+        { bakeWorld, bakeArena },
+        { buildWorld },
+      ] = await Promise.all([
+        import("kaplay"),
+        import("./synth"),
+        import("./engine"),
+        import("./assets"),
+        import("./content"),
+      ]);
       if (destroyed || !canvasRef.current) return;
 
       // Preload the pixel font BEFORE kaplay boots. face.load() only readies
@@ -65,9 +76,10 @@ export default function GameMode({ onExit }) {
         }
       } catch {}
 
-      // bake the whole static map into one texture before the engine boots
+      // bake both static maps into textures before the engine boots
       const world = buildWorld();
       const baked = await bakeWorld(world);
+      const arena = await bakeArena();
       if (destroyed || !canvasRef.current) return;
 
       const synth = createSynth();
@@ -106,8 +118,19 @@ export default function GameMode({ onExit }) {
             touchFire.current = false;
             return q;
           },
+          // arena: return to the overworld + the endless game-over (submit)
+          exitToStory: () => {
+            setGameOver(null);
+            setMode("story");
+            apiRef.current?.enterStory?.();
+            refocusCanvas();
+          },
+          onArenaOver: (score, wave, best) => {
+            setSubmit(null); // fresh submit form each death
+            setGameOver({ score, hi: best.bestScore, wave, arena: true });
+          },
         },
-        { world, baked }
+        { world, baked, arena }
       );
     })();
 
@@ -134,6 +157,9 @@ export default function GameMode({ onExit }) {
   // panel close (E or Esc) + mute keys live at the DOM layer
   useEffect(() => {
     const onKey = (e) => {
+      // never hijack keys typed into the leaderboard name field
+      const tag = e.target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
       if ((e.key === "Escape" || e.key === "e" || e.key === "E") && panel) {
         // stopPropagation keeps kaplay's canvas handler from re-opening it
         e.stopPropagation();
@@ -194,8 +220,58 @@ export default function GameMode({ onExit }) {
 
   const restart = () => {
     setGameOver(null);
-    apiRef.current?.restart();
+    // arena runs it back into the arena; story restarts the overworld
+    if (mode === "arena") apiRef.current?.enterArena?.();
+    else apiRef.current?.restart();
     refocusCanvas();
+  };
+
+  // the arcade portal card's action — drop into the endless arena
+  const enterArena = () => {
+    setPanel(null);
+    setMode("arena");
+    apiRef.current?.enterArena?.();
+    refocusCanvas();
+  };
+
+  // leave the arena back to the overworld (from the arena game-over card)
+  const backToStory = () => {
+    setGameOver(null);
+    setPanel(null);
+    setMode("story");
+    apiRef.current?.enterStory?.();
+    refocusCanvas();
+  };
+
+  const ERR_LABEL = {
+    bad_name: "Pick a printable name (1–12 chars).",
+    bad_score: "Score looked off — not submitted.",
+    bad_wave: "Wave looked off — not submitted.",
+    implausible: "Score didn't match the wave — not submitted.",
+    rate_limited: "Too many submissions — wait a bit.",
+    write_failed: "Server hiccup — try again.",
+  };
+
+  // submit the endless run to the global leaderboard
+  const submitScore = async () => {
+    const trimmed = name.trim();
+    if (!trimmed || submit === "sending" || !gameOver) return;
+    setSubmit("sending");
+    try {
+      localStorage.setItem("omer-arcade-name", trimmed);
+    } catch {}
+    try {
+      const res = await fetch("/api/leaderboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed, score: gameOver.score, wave: gameOver.wave }),
+      });
+      const data = await res.json();
+      if (data.ok) setSubmit({ ok: true, rank: data.rank, entries: data.entries || [] });
+      else setSubmit({ error: ERR_LABEL[data.error] || "Couldn't submit — try again." });
+    } catch {
+      setSubmit({ error: "Network error — try again." });
+    }
   };
 
   const dpad = (x, y) => ({
@@ -234,7 +310,9 @@ export default function GameMode({ onExit }) {
       {/* desktop hint — top center, clear of the canvas objective text */}
       {!isTouch && (
         <p className="game-pixel pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] text-cream/60">
-          WASD MOVE · LMB SWORD · SPACE FIREBALL · E READ · ESC EXIT
+          {mode === "arena"
+            ? "WASD MOVE · LMB SWORD · SPACE FIREBALL · ESC STORY"
+            : "WASD MOVE · LMB SWORD · SPACE FIREBALL · E READ · ESC EXIT"}
         </p>
       )}
 
@@ -281,15 +359,26 @@ export default function GameMode({ onExit }) {
                 ))}
               </div>
             )}
-            <button onClick={closePanel} className="game-btn game-btn-ghost mt-7">
-              [E] CLOSE
-            </button>
+            {panel.action ? (
+              <div className="mt-7 flex flex-wrap gap-3">
+                <button onClick={enterArena} className="game-btn game-btn-orange">
+                  {panel.action.label.toUpperCase()} →
+                </button>
+                <button onClick={closePanel} className="game-btn game-btn-ghost">
+                  [E] NOT NOW
+                </button>
+              </div>
+            ) : (
+              <button onClick={closePanel} className="game-btn game-btn-ghost mt-7">
+                [E] CLOSE
+              </button>
+            )}
           </article>
         </div>
       )}
 
-      {/* game over — same pixel treatment */}
-      {gameOver && (
+      {/* game over — story vs endless-arena (with leaderboard submit) */}
+      {gameOver && !gameOver.arena && (
         <div className="absolute inset-0 grid place-items-center bg-ink/80 p-4">
           <div className="game-card max-w-sm p-8 text-center">
             <p className="game-pixel mb-3 text-[10px] uppercase text-orange">Game over</p>
@@ -304,6 +393,88 @@ export default function GameMode({ onExit }) {
             <div className="mt-7 flex justify-center gap-3">
               <button onClick={restart} className="game-btn">
                 RUN IT BACK
+              </button>
+              <button onClick={onExit} className="game-btn game-btn-ghost">
+                EXIT
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {gameOver && gameOver.arena && (
+        <div className="absolute inset-0 grid place-items-center overflow-y-auto bg-ink/85 p-4">
+          <div className="game-card w-full max-w-sm p-7 text-center">
+            <p className="game-pixel mb-3 text-[10px] uppercase text-orange">Arcade over</p>
+            <h3 className="game-pixel text-lg leading-relaxed text-cream">YOU FELL</h3>
+            <p className="game-pixel mt-4 text-[10px] leading-relaxed text-cream/80">
+              SCORE <span className="text-orange">{gameOver.score}</span>
+              <br />
+              WAVE {gameOver.wave} · BEST {gameOver.hi}
+            </p>
+
+            {/* submit form → success → error, in one place */}
+            {submit?.ok ? (
+              <div className="mt-6">
+                <p className="game-pixel text-[10px] text-cream">
+                  {submit.rank ? (
+                    <>ON THE BOARD · <span className="text-orange">#{submit.rank}</span></>
+                  ) : (
+                    "SCORE SUBMITTED"
+                  )}
+                </p>
+                {submit.entries.length > 0 && (
+                  <ol className="mt-4 space-y-1.5 text-left">
+                    {submit.entries.slice(0, 5).map((e, i) => (
+                      <li
+                        key={`${e.t}-${i}`}
+                        className="game-pixel grid grid-cols-[1.1rem_1fr_auto] items-center gap-2 text-[9px] text-cream/85"
+                      >
+                        <span className={i === 0 ? "text-orange" : "text-cream/40"}>{i + 1}</span>
+                        <span className="truncate uppercase">{e.name}</span>
+                        <span className="tabular-nums text-cream">
+                          {Number(e.score).toLocaleString()}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            ) : (
+              <div className="mt-6">
+                <label className="game-pixel mb-2 block text-[9px] uppercase text-cream/50">
+                  Your name for the board
+                </label>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && submitScore()}
+                  maxLength={12}
+                  placeholder="OMER"
+                  aria-label="Leaderboard name"
+                  className="game-pixel w-full border-2 border-cream/30 bg-ink px-3 py-2 text-center text-[11px] uppercase text-cream outline-none focus:border-orange"
+                />
+                {submit?.error && (
+                  <p className="game-pixel mt-2 text-[8px] leading-relaxed text-orange">
+                    {submit.error}
+                  </p>
+                )}
+                <button
+                  onClick={submitScore}
+                  disabled={submit === "sending" || !name.trim()}
+                  className="game-btn game-btn-orange mt-4 w-full disabled:opacity-40"
+                >
+                  {submit === "sending" ? "SENDING…" : "SUBMIT SCORE"}
+                </button>
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-wrap justify-center gap-2">
+              <button onClick={restart} className="game-btn">
+                PLAY AGAIN
+              </button>
+              <button onClick={backToStory} className="game-btn game-btn-ghost">
+                TO STORY
               </button>
               <button onClick={onExit} className="game-btn game-btn-ghost">
                 EXIT

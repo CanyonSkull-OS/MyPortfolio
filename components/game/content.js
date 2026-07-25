@@ -95,6 +95,16 @@ export const MONUMENTS = {
     body: `${autoSkill.note} Standing orchestrations too: ${n8nWork.body}`,
     tags: skills.flatMap((s) => s.items).slice(0, 12),
   },
+  // the arcade portal — a disclaimer card whose action drops you into the
+  // endless wave mode (Unlimited Arcade). Absent from PROGRESSION, so it
+  // gates nothing and is purely optional.
+  J: {
+    kicker: "Optional · endless mode",
+    title: "Unlimited Arcade",
+    body: "Step through and the rules change: endless waves of enemies, each harder than the last, until you fall. No monuments, no story — just how long you last and how high you score. Every run is ranked on the global leaderboard.",
+    tags: ["WASD / arrows — move", "LMB — sword", "Space — fireball", "Esc — back to story"],
+    action: { label: "Enter the arcade" },
+  },
 };
 
 // short floating labels shown above each monument in-world
@@ -108,6 +118,7 @@ export const MONUMENT_LABELS = {
   G: "2025",
   H: "BEAMHIVE",
   I: "SKILLS",
+  J: "ARCADE",
 };
 
 /*
@@ -168,6 +179,7 @@ export const MONUMENT_SPRITES = {
   G: "monument",
   H: "monument",
   I: "obelisk",
+  J: "obelisk",
 };
 
 /* ---------------- regions ---------------- */
@@ -240,6 +252,7 @@ export function buildWorld() {
     ["A", 10, 12],
     ["B", 14, 8],
     ["C", 14, 18],
+    ["J", 19, 17], // arcade portal — optional, in The Landing
     ["D", 30, 7],
     ["E", 34, 13],
     ["F", 38, 18],
