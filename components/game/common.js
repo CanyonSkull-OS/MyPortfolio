@@ -1,37 +1,53 @@
 /*
   common.js — the parts of the arcade that both the story overworld
   (engine.js) and the endless arena (arena.js) share, factored out so the
-  two scenes run identical mob AI, combat, HUD and scoring instead of two
-  drifting copies.
+  two scenes run identical player control, mob AI, combat, HUD and scoring
+  instead of two drifting copies.
 
-  Everything here is a factory: it takes the live KAPLAY handle `k`, the
-  synth, a `kit` of palette+helpers, and a small `deps` object holding the
-  scene's mutable `state`/`player` (passed by reference — never reassigned,
-  only mutated — so the closures read live values). Nothing here knows about
-  progression, regions, monuments or waves; those stay scene-side.
+  Redesign (side-view slasher): characters are the Tiny RPG sheets loaded by
+  characters.js as multi-anim sprites. The player is a 3-hit-combo soldier;
+  mobs telegraph real attacks (windup → hit-frame) and play hurt/death anims.
+  The SCORE model (kill-streak comboMult, MOB_TYPES score values) is unchanged
+  so the global leaderboard stays consistent.
+
+  Everything here is a factory taking the live KAPLAY handle `k`, the synth, a
+  `kit` of palette+helpers, and a `deps` object holding the scene's mutable
+  `state`/`player` (passed by reference — mutated, never reassigned).
 */
 
-/* ---- tunables (identical to the originals in engine.js) ---- */
+import { CHAR_FRAMES, CHAR_META, charAnchor, setAnim, curAnim, animDuration } from "./characters";
+
+/* ---- tunables ---- */
 export const SPEED = 92;
-export const ATTACK_CD = 0.3;
-export const COMBO_WINDOW = 3;
+export const ATTACK_CD = 0.16; // floor between swings (anim length usually dominates)
+export const COMBO_WINDOW = 3; // KILL-streak window (score multiplier) — unchanged
+export const CHAIN_WINDOW = 0.7; // MELEE-chain window (attack1→2→3) — mechanical only
 
 export const FIRE_CD = 0.4;
 export const FIRE_COST = 34;
 export const MANA_MAX = 100;
 export const MANA_REGEN = 20; // points per second
 
-/* idle: the standing anim shown when a mob is paused or pressed against a
-   wall (slugs only have the one anim — it reads as idling anyway) */
+/*
+  Mob archetypes. hp / speed / score / chase are UNCHANGED from the original
+  (the leaderboard depends on the score values). New fields are visual/behaviour
+  only: `char` picks the side-view sprite, `scale`/`tint` differentiate variants
+  from the 3 monster sheets, and atk* drive the telegraphed attack.
+*/
 export const MOB_TYPES = {
-  bug: { sprite: "goblin", idle: "goblin-idle", hp: 1, speed: 55, score: 50, chase: 110 },
-  slime: { sprite: "slug", idle: "slug", hp: 2, speed: 34, score: 100, chase: 120 },
-  punch: { sprite: "zombie", idle: "zombie-idle", hp: 2, speed: 46, score: 150, chase: 130 },
-  cron: { sprite: "chort", idle: "chort-idle", hp: 3, speed: 26, score: 200, chase: 130 },
-  boss: { sprite: "demon", idle: "demon-idle", hp: 20, speed: 22, score: 500, chase: 170 },
+  bug: { char: "orc", hp: 1, speed: 55, score: 50, chase: 110,
+    scale: 0.9, atkRange: 20, atkHit: 26, atkCd: 1.1, hitFrac: 0.5 },
+  slime: { char: "blood", hp: 2, speed: 34, score: 100, chase: 120,
+    scale: 0.95, atkRange: 18, atkHit: 24, atkCd: 1.3, hitFrac: 0.5 },
+  punch: { char: "demon", hp: 2, speed: 46, score: 150, chase: 130,
+    scale: 1.0, atkRange: 24, atkHit: 30, atkCd: 1.4, hitFrac: 0.55 },
+  cron: { char: "blood", hp: 3, speed: 26, score: 200, chase: 130,
+    scale: 1.12, tint: [170, 220, 225], atkRange: 20, atkHit: 27, atkCd: 1.2, hitFrac: 0.5 },
+  boss: { char: "demon", hp: 20, speed: 22, score: 500, chase: 170,
+    scale: 1.7, tint: [255, 165, 150], atkRange: 34, atkHit: 46, atkCd: 1.6, hitFrac: 0.55 },
 };
 
-// combo multiplier: +0.5x per kill in the window, capped at 4x
+// combo multiplier: +0.5x per kill in the window, capped at 4x (unchanged)
 export function comboMult(combo) {
   return Math.min(1 + 0.5 * (combo - 1), 4);
 }
@@ -194,42 +210,62 @@ export function floatDamage(k, kit, amount, at) {
 }
 
 /*
+  ---- player factory ----
+  Builds the soldier + its shadow. The scene owns movement/camera/input; combat
+  (makeCombat) owns the attack chain + hurt/death anims. Returns the entity.
+*/
+export function makePlayer(k, kit, spawn) {
+  const { addShadow } = kit;
+  const player = k.add([
+    k.sprite("soldier"),
+    k.pos(spawn.x, spawn.y),
+    k.area({ shape: new k.Rect(k.vec2(-6, -9), 12, 9) }),
+    k.body(),
+    k.anchor(charAnchor(k, "soldier")),
+    k.scale(CHAR_META.soldier.scale),
+    k.z(10),
+    k.opacity(1),
+    "player",
+  ]);
+  setAnim(player, "idle", { force: true });
+  addShadow(player, 5.5);
+  return player;
+}
+
+/*
   ---- mob factory ----
   spawnMob(sp) builds one mob + its AI. sp = { type, x, y } with optional
-  { hpMul, speedMul, scoreMul }. deps = { state, player, leash }:
-    - leash true  (story): mobs tether to their homePos (~150px) and only
-      chase inside cfg.chase — a cleared region stays quiet.
-    - leash false (arena): no tether and an effectively infinite chase, so
-      wave mobs commit to the player across the whole arena.
+  { hpMul, speedMul, scoreMul }. deps = { state, player, leash, onPlayerHit }:
+    - leash true  (story): mobs tether to homePos (~150px) and only chase
+      inside cfg.chase — a cleared region stays quiet.
+    - leash false (arena): no tether and infinite chase.
+    - onPlayerHit(mob): the scene's player-damage routine, called on a mob
+      attack's hit-frame (replaces the old contact-damage collide).
 */
-export function makeMobFactory(k, kit, deps) {
+export function makeMobFactory(k, synth, kit, deps) {
   const { ORANGE, ptext, addShadow } = kit;
-  const { state, player, leash = true } = deps;
+  const { state, player, leash = true, onPlayerHit } = deps;
 
   return function spawnMob(sp) {
     const cfg = MOB_TYPES[sp.type];
+    const char = cfg.char;
     const isBoss = sp.type === "boss";
     const chaseR = leash ? cfg.chase : 9999;
     const hp = Math.max(1, Math.round(cfg.hp * (sp.hpMul || 1)));
     const speedBase = cfg.speed * (sp.speedMul || 1);
     const scoreVal = Math.round(cfg.score * (sp.scoreMul || 1));
+    const sc = cfg.scale || 1;
 
-    const mob = k.add([
-      k.sprite(cfg.sprite),
+    const comps = [
+      k.sprite(char),
       k.pos(sp.x * 16 + 8, sp.y * 16 + 14),
-      k.area({
-        shape: new k.Rect(
-          k.vec2(isBoss ? -10 : -6, isBoss ? -10 : -7),
-          isBoss ? 20 : 12,
-          isBoss ? 10 : 7
-        ),
-      }),
+      k.area({ shape: new k.Rect(k.vec2(-6 * sc, -8 * sc), 12 * sc, 8 * sc) }),
       k.body(),
-      k.anchor("bot"),
-      k.scale(1),
+      k.anchor(charAnchor(k, char)),
+      k.scale(sc),
       k.z(10),
       k.opacity(1),
-      k.offscreen({ hide: true, distance: 80 }),
+      k.offscreen({ hide: true, distance: 120 }),
       "mob",
       {
         type: sp.type,
@@ -242,12 +278,18 @@ export function makeMobFactory(k, kit, deps) {
         knock: k.vec2(0, 0),
         spawner: sp,
         homePos: k.vec2(sp.x * 16 + 8, sp.y * 16 + 14),
+        busy: false, // attacking or in hit-stun → rooted
+        dying: false,
+        nextAtk: 0,
+        _swingId: 0,
       },
-    ]);
-    mob.play("play");
-    addShadow(mob, isBoss ? 11 : 5);
+    ];
+    if (cfg.tint) comps.push(k.color(cfg.tint[0], cfg.tint[1], cfg.tint[2]));
+    const mob = k.add(comps);
+    setAnim(mob, "idle", { force: true });
+    addShadow(mob, (isBoss ? 11 : 5) * sc);
+
     if (isBoss) {
-      // the golem carries a name tag
       const tagBg = k.add([
         k.rect(15 * 8 + 8, 12), k.pos(mob.pos), k.anchor("center"),
         k.color(0, 21, 36), k.opacity(0.65), k.z(3000),
@@ -257,7 +299,7 @@ export function makeMobFactory(k, kit, deps) {
         k.color(ORANGE), k.z(3001),
       ]);
       const sync = () => {
-        tagBg.pos = mob.pos.sub(0, 44);
+        tagBg.pos = mob.pos.sub(0, 52);
         tag.pos = tagBg.pos;
       };
       sync();
@@ -267,32 +309,99 @@ export function makeMobFactory(k, kit, deps) {
         tag.destroy();
       });
     }
-    // anim follows real displacement, so a mob pressed against a wall
-    // stands instead of running in place
-    mob.curSprite = cfg.sprite;
+
     mob.prevPos = mob.pos.clone();
     mob.stuckT = 0;
     mob.blockedDir = null;
-    const setMobSprite = (name) => {
-      if (mob.curSprite === name) return;
-      mob.curSprite = name;
-      mob.use(k.sprite(name));
-      mob.play("play");
+
+    /* telegraphed attack: windup anim, damage on the hit-frame if the player
+       is still in range, then a recovery cooldown */
+    function startAttack() {
+      mob.busy = true;
+      mob.flipX = player.pos.x < mob.pos.x;
+      const which = Math.random() < 0.5 ? "attack1" : "attack2";
+      const dur = animDuration(which, CHAR_FRAMES[char][which]);
+      const id = ++mob._swingId;
+      synth.play("slash");
+      setAnim(mob, which, {
+        force: true,
+        onEnd: () => {
+          if (mob._swingId === id) {
+            mob.busy = false;
+            mob.nextAtk = k.time() + cfg.atkCd;
+          }
+        },
+      });
+      k.wait(dur * (cfg.hitFrac || 0.5), () => {
+        if (!mob.exists() || mob.dying || mob._swingId !== id) return; // interrupted
+        if (player.pos.dist(mob.pos) <= cfg.atkHit) onPlayerHit && onPlayerHit(mob);
+      });
+    }
+
+    // taking a hit: interrupt any swing (bump _swingId) + play hurt one-shot
+    mob.playHurt = () => {
+      if (mob.dying) return;
+      const id = ++mob._swingId;
+      mob.busy = true;
+      setAnim(mob, "hurt", {
+        force: true,
+        onEnd: () => {
+          if (mob._swingId === id) {
+            mob.busy = false;
+            mob.nextAtk = Math.max(mob.nextAtk, k.time() + 0.25);
+          }
+        },
+      });
+    };
+
+    // death: cancel pending hits, leave the "mob" set (so nothing hits/counts
+    // it again), play death, then destroy
+    mob.die = (after) => {
+      if (mob.dying) return;
+      mob.dying = true;
+      mob._swingId++;
+      mob.untag("mob");
+      const dur = animDuration("death", CHAR_FRAMES[char].death);
+      setAnim(mob, "death", {
+        force: true,
+        onEnd: () => {
+          mob.destroy();
+          after && after();
+        },
+      });
+      // safety net if onEnd is missed
+      k.wait(dur + 0.4, () => {
+        if (mob.exists()) {
+          mob.destroy();
+          after && after();
+        }
+      });
     };
 
     mob.onUpdate(() => {
-      if (state.paused || state.over) return;
+      if (state.paused || state.over || mob.dying) return;
       mob.z = mob.pos.y; // depth sort
-      const moved = mob.pos.dist(mob.prevPos); // last frame's real motion
+      const moved = mob.pos.dist(mob.prevPos);
       mob.prevPos = mob.pos.clone();
-      const d = player.pos.dist(mob.pos);
-      if (d > 420) return; // sleep far away
 
+      // knockback wins briefly (also carries through hit-stun)
       if (mob.knock.len() > 1) {
         mob.move(mob.knock);
         mob.knock = mob.knock.scale(1 - Math.min(k.dt() * 10, 0.9));
-      } else if (leash && mob.pos.dist(mob.homePos) > 150) {
-        // leash: stay in your region
+        return;
+      }
+      if (mob.busy) return; // attacking / hit-stun → rooted, anim owns the sprite
+
+      const d = player.pos.dist(mob.pos);
+      if (d > 420) return; // sleep far away
+
+      // in range + off cooldown → attack
+      if (k.time() >= mob.nextAtk && d <= cfg.atkRange) {
+        startAttack();
+        return;
+      }
+
+      if (leash && mob.pos.dist(mob.homePos) > 150) {
         mob.move(mob.homePos.sub(mob.pos).unit().scale(mob.speedBase * 0.7));
         mob.flipX = mob.homePos.x < mob.pos.x;
       } else if (d < mob.chaseR) {
@@ -305,7 +414,6 @@ export function makeMobFactory(k, kit, deps) {
           if (Math.random() < 0.35 && !mob.blockedDir) {
             mob.wanderDir = k.vec2(0, 0);
           } else {
-            // pick a fresh heading, away from any wall we just hit
             let nd = k.vec2(0, 0);
             for (let i = 0; i < 5; i++) {
               const a = Math.random() * Math.PI * 2;
@@ -319,8 +427,6 @@ export function makeMobFactory(k, kit, deps) {
         if (mob.wanderDir.len() > 0) {
           mob.flipX = mob.wanderDir.x < 0;
           mob.move(mob.wanderDir.scale(mob.speedBase * 0.4));
-          // wall bump: wanted to walk but barely displaced → stand a
-          // beat, then head somewhere else
           if (moved < k.dt() * mob.speedBase * 0.1) {
             mob.stuckT += k.dt();
             if (mob.stuckT > 0.25) {
@@ -335,8 +441,10 @@ export function makeMobFactory(k, kit, deps) {
         }
       }
 
-      setMobSprite(moved > k.dt() * 4 ? cfg.sprite : cfg.idle);
+      // walk when actually displacing, else idle
+      setAnim(mob, moved > k.dt() * 4 ? "walk" : "idle");
     });
+
     sp.mob = mob;
     return mob;
   };
@@ -344,61 +452,95 @@ export function makeMobFactory(k, kit, deps) {
 
 /*
   ---- combat ----
-  deps = { state, player, swordPivot, onMobDeath }. onMobDeath(mob) is the
-  scene's killMob (scoring + progression/wave logic). isSwinging() lets the
-  scene's movement loop know whether to reclaim the sword rest pose.
+  Owns the player's melee 3-hit chain, fireball, and the player's hurt/death
+  anims. deps = { state, player, onMobDeath }. onMobDeath(mob) is the scene's
+  killMob (scoring + progression/wave logic).
+
+  Exposes:
+    attack()          — advance the melee chain (attack1→2→3)
+    fireball()        — ranged, spends mana, AoE on impact
+    tickAnim(moving)  — call every frame from the movement loop; sets walk/idle
+                        when the player isn't mid-swing/hit (and flips to face)
+    playerHurt()      — play the hurt one-shot (called from the damage routine)
+    playerDeath(cb)   — play death, then cb() (game over)
+    hurtMob(mob,n,from)
+    isBusy()          — a one-shot (attack/hurt) is playing
 */
 export function makeCombat(k, synth, kit, deps) {
   const { ORANGE, EMBER, poof } = kit;
-  const { state, player, swordPivot, onMobDeath } = deps;
-  let swinging = false;
+  const { state, player, onMobDeath } = deps;
+  let swing = null; // { start, dur, step, dir } | null
+  let hurtUntil = 0;
 
-  const faceAngle = () =>
-    Math.atan2(state.facing.y, state.facing.x) * (180 / Math.PI) + 90;
+  const F = CHAR_FRAMES.soldier;
+  const isBusy = () => swing !== null || k.time() < hurtUntil;
 
   function hurtMob(mob, amount, fromPos) {
+    if (mob.dying) return;
     mob.hp -= amount;
     mob.knock = mob.pos.sub(fromPos).unit().scale(amount >= 2 ? 210 : 190);
     const s0 = mob.scale.x;
     k.tween(s0 * 1.22, s0, 0.15, (v) => mob.scaleTo(v));
-    floatDamage(k, kit, amount, mob.pos.sub(0, 4)); // per-hit damage number
+    floatDamage(k, kit, amount, mob.pos.sub(0, 4));
     if (mob.hp <= 0) onMobDeath(mob);
+    else mob.playHurt && mob.playHurt();
   }
 
-  // melee — sweeps the sword arc in the facing dir
-  function attack() {
-    const now = k.time();
-    if (now - state.attackAt < ATTACK_CD || state.paused || state.over) return;
-    state.attackAt = now;
-    synth.play("slash");
-
-    const dir = state.facing;
-    const ang = faceAngle();
-
-    swinging = true;
-    swordPivot.angle = ang - 85;
-    k.tween(ang - 85, ang + 70, 0.13, (v) => (swordPivot.angle = v), k.easings.easeOutQuad)
-      .then(() => {
-        swinging = false; // idle lerp reclaims the rest pose
-      });
-
-    // direct arc check — a collision-object hitbox proved unreliable
+  // apply one swing's damage — direct arc check (a collision hitbox proved
+  // unreliable). The finisher (step 3) reaches further and sweeps a wider arc.
+  function applySwing(step, dir) {
+    if (state.over) return;
+    const finisher = step === 3;
+    const reach = finisher ? 62 : 46;
     let landed = false;
     for (const mob of k.get("mob")) {
       const to = mob.pos.sub(player.pos);
-      const reach = 46 + (mob.type === "boss" ? 16 : 0);
       const d = to.len();
-      if (d > reach) continue;
-      // must be roughly in front, unless point-blank (16 ≈ contact range,
-      // so a mob chewing on your back is always hittable)
-      if (d > 16 && to.unit().dot(dir) < 0.2) continue;
-      hurtMob(mob, 1, player.pos);
+      const r = reach + (mob.type === "boss" ? 16 : 0);
+      if (d > r) continue;
+      if (d > 16 && to.unit().dot(dir) < (finisher ? -0.15 : 0.2)) continue;
+      hurtMob(mob, finisher ? 2 : 1, player.pos);
       landed = true;
     }
     if (landed) {
       synth.play("hit");
-      k.shake(3);
+      k.shake(finisher ? 6 : 3);
+    } else if (finisher) {
+      k.shake(2);
     }
+  }
+
+  function attack() {
+    const now = k.time();
+    if (state.paused || state.over) return;
+    if (now < state.attackAt + ATTACK_CD) return;
+    // mid-swing: only allow cancelling into the next hit late in the anim
+    if (swing && now < swing.start + swing.dur * 0.55) return;
+    if (now < hurtUntil) return;
+
+    // advance or reset the melee chain (distinct from the score combo)
+    const chained = state.chain > 0 && state.chain < 3 && now - state.chainAt <= CHAIN_WINDOW;
+    state.chain = chained ? state.chain + 1 : 1;
+    state.chainAt = now;
+    state.attackAt = now;
+
+    const step = state.chain;
+    const animName = "attack" + step;
+    const dur = animDuration(animName, F[animName]);
+    const dir = state.facing.unit();
+    if (state.facing.x !== 0) player.flipX = state.facing.x < 0; // keep facing on vertical swings
+    swing = { start: now, dur, step, dir };
+    synth.play(step === 3 ? "explosion" : "slash");
+    setAnim(player, animName, {
+      force: true,
+      onEnd: () => {
+        if (swing && swing.start === now) {
+          swing = null;
+          if (step === 3) state.chain = 0; // finisher closes the chain
+        }
+      },
+    });
+    k.wait(dur * 0.45, () => applySwing(step, dir));
   }
 
   // fireball — ranged, spends mana, bursts on impact with AoE
@@ -466,13 +608,42 @@ export function makeCombat(k, synth, kit, deps) {
     ball.destroy();
   });
 
-  return { attack, fireball, explode, hurtMob, isSwinging: () => swinging };
+  // called every frame from the movement loop. When a one-shot owns the sprite
+  // we leave it alone; otherwise show walk/idle and flip toward travel.
+  function tickAnim(moving, flipX) {
+    if (isBusy()) return;
+    if (moving && flipX !== undefined) player.flipX = flipX;
+    setAnim(player, moving ? "walk" : "idle");
+  }
+
+  function playerHurt() {
+    if (state.over) return;
+    const dur = animDuration("hurt", F.hurt);
+    hurtUntil = k.time() + dur;
+    swing = null; // a hit interrupts a swing
+    setAnim(player, "hurt", { force: true });
+  }
+
+  function playerDeath(cb) {
+    swing = null;
+    hurtUntil = 0;
+    let done = false;
+    const fire = () => {
+      if (done) return;
+      done = true;
+      cb && cb();
+    };
+    setAnim(player, "death", { force: true, onEnd: fire });
+    // safety: fire once even if onEnd is missed
+    k.wait(animDuration("death", F.death) + 0.3, fire);
+  }
+
+  return { attack, fireball, explode, hurtMob, tickAnim, playerHurt, playerDeath, isBusy };
 }
 
 /*
   ---- pickups ----
   Flask heals a heart (cap 3), coin is score. deps = { state, refreshHUD }.
-  refreshHUD is the scene's HUD-refresh so the hearts/score update on collect.
 */
 export function makePickups(k, kit, synth, deps) {
   const { poof } = kit;

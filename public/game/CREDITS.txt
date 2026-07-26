@@ -1,13 +1,50 @@
-Game art credits (both CC0 / public domain):
+Game art & audio credits.
 
-- 0x72 DungeonTileset II v1.7 (dungeon.png)
+=====================================================================
+NEW ASSET SET (redesign — side-view slasher)
+=====================================================================
+
+Characters (chars/soldier, chars/orc, chars/demon, chars/blood; arrow in props/):
+- "Tiny RPG Character Asset Pack" 01 (Soldier & Orc) + 02 (Demon_A &
+  Blood Monster_A) by freeraw
+  https://free-game-assets.itch.io/  (search: Tiny RPG Character Asset Pack)
+  Free versions. 100x100 side-view sheets, one PNG per animation
+  (idle/walk/attack/hurt/death). NOTE: no license file ships inside the
+  packs — confirm the exact free-tier terms + required credit line on the
+  itch.io page before public deploy. Free tiers are typically usable in
+  personal/commercial projects with credit appreciated.
+
+Environment tiles (tiles/interiors.png, tiles/room_builder.png):
+- "Modern Interiors" (free version) by LimeZu
+  https://limezu.itch.io/moderninteriors
+  *** LICENSE CONSTRAINT ***  The FREE version is NON-COMMERCIAL ONLY and
+  forbids using OR editing the sprites in commercial projects. A personal
+  portfolio is defensible as non-commercial, but if this site is ever
+  positioned commercially, either buy the full license (~$1.20+) or swap
+  the map to a CC0 tileset (e.g. Kenney Tiny Town / Modern City, or
+  0x72's tilesets) before deploy.
+
+=====================================================================
+RETAINED CC0 ASSETS (still used after the redesign)
+=====================================================================
+
+- 0x72 DungeonTileset II v1.7 (dungeon.png)      CC0
   https://0x72.itch.io/dungeontileset-ii
-
-- Kenney Roguelike/RPG pack (terrain.png)
+  Now only: HUD hearts, flask/coin pickups, chest + fountain monuments.
+- Kenney Roguelike/RPG pack (terrain.png)        CC0
   https://kenney.nl/assets/roguelike-rpg-pack
+  Now only: the statue + fence monument/gate sprites.
 
-Music:
+  (The old hero/sword/mob sprites from these sheets are no longer loaded;
+  characters + the map floors/walls all come from the packs above. These
+  two sheets are kept solely for the small UI/pickup/monument sprites — a
+  future polish pass could reskin the monuments to Modern Interiors
+  furniture and drop both sheets entirely.)
 
+=====================================================================
+Music
+=====================================================================
 - "Heat" by Zambolino (music.mp3)
-  Copyright-free / free-to-use track via freetouse.com. Cleared for
-  public/deployed use.
+  Copyright-free / free-to-use via freetouse.com. Cleared for deploy.
+
+Font: pixel.ttf (Press Start 2P family, OFL) — used for HUD/leaderboard.

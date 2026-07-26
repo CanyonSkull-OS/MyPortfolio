@@ -23,6 +23,7 @@ import {
   comboMult,
   makeKit,
   makeHud,
+  makePlayer,
   makeMobFactory,
   makeCombat,
   makePickups,
@@ -91,7 +92,7 @@ export function registerArenaScene(k, synth, bridge, arena) {
 
   k.scene("arena", () => {
     const kit = makeKit(k);
-    const { CREAM, ORANGE, INK, setCam, ptext, lerpAngle, poof, addShadow } = kit;
+    const { CREAM, ORANGE, INK, setCam, ptext, poof } = kit;
     const rand = Math.random;
 
     /* ---------------- state ---------------- */
@@ -104,6 +105,8 @@ export function registerArenaScene(k, synth, bridge, arena) {
       lastKill: -99,
       iframeUntil: 0,
       attackAt: -99,
+      chain: 0, // melee combo step; distinct from the score combo
+      chainAt: -99,
       facing: k.vec2(0, 1),
       mana: MANA_MAX,
       castAt: -99,
@@ -123,32 +126,11 @@ export function registerArenaScene(k, synth, bridge, arena) {
       ]);
     }
 
-    /* ---------------- player ---------------- */
-    const player = k.add([
-      k.sprite("hero-idle"),
-      k.pos(arena.playerSpawn.x, arena.playerSpawn.y),
-      k.area({ shape: new k.Rect(k.vec2(-5, -8), 10, 8) }),
-      k.body(),
-      k.anchor("bot"),
-      k.z(10),
-      k.opacity(1),
-      "player",
-    ]);
-    player.play("play");
-    addShadow(player, 5.5);
-    let curSprite = "hero-idle";
-    function setHeroSprite(name, flipX) {
-      if (curSprite !== name) {
-        player.use(k.sprite(name));
-        player.play("play");
-        curSprite = name;
-      }
-      player.flipX = flipX;
-    }
-    const swordPivot = player.add([k.pos(0, -10), k.rotate(215), k.z(1)]);
-    swordPivot.add([k.sprite("sword"), k.pos(0, -3), k.anchor("bot")]);
-    const faceAngle = () =>
-      Math.atan2(state.facing.y, state.facing.x) * (180 / Math.PI) + 90;
+    /* ---------------- player (soldier: side-view, 3-hit combo) -------- */
+    const player = makePlayer(k, kit, {
+      x: arena.playerSpawn.x,
+      y: arena.playerSpawn.y,
+    });
 
     /* ---------------- HUD: shared widgets + arena lines ---------------- */
     const hud = makeHud(k, kit);
@@ -195,14 +177,19 @@ export function registerArenaScene(k, synth, bridge, arena) {
     const combat = makeCombat(k, synth, kit, {
       state,
       player,
-      swordPivot,
       onMobDeath: (mob) => killMob(mob),
     });
     // leash:false → wave mobs commit to the player across the whole room
-    const spawnMob = makeMobFactory(k, kit, { state, player, leash: false });
+    const spawnMob = makeMobFactory(k, synth, kit, {
+      state,
+      player,
+      leash: false,
+      onPlayerHit,
+    });
     const pickups = makePickups(k, kit, synth, { state, refreshHUD });
 
     function killMob(mob) {
+      if (mob.dying) return; // one death per mob
       const at = mob.pos.sub(0, 8);
       addScore(mob.scoreVal, at);
       poof(at, mob.type === "cron" ? "#ff7d00" : mob.type === "bug" ? "#a34a22" : "#2f8291", 9);
@@ -215,7 +202,7 @@ export function registerArenaScene(k, synth, bridge, arena) {
         hud.showBanner("GOLEM DOWN", "keep going");
         poof(at, "#ff7d00", 22);
       }
-      mob.destroy();
+      mob.die(); // scoring already applied; play death anim, then despawn
       state.alive -= 1;
       refreshHUD();
       if (state.alive <= 0 && !state.over) waveClear();
@@ -265,8 +252,8 @@ export function registerArenaScene(k, synth, bridge, arena) {
       });
     }
 
-    /* ---------------- player damage ---------------- */
-    k.onCollide("player", "mob", (p, mob) => {
+    /* ---------------- player damage (from a mob attack's hit-frame) --- */
+    function onPlayerHit(mob) {
       if (state.paused || state.over) return;
       const now = k.time();
       if (now < state.iframeUntil) return;
@@ -276,14 +263,15 @@ export function registerArenaScene(k, synth, bridge, arena) {
       refreshHUD();
       synth.play("hurt");
       k.shake(7);
-      mob.knock = mob.pos.sub(player.pos).unit().scale(120);
+      combat.playerHurt();
+      mob.knock = mob.pos.sub(player.pos).unit().scale(80);
       const blink = k.loop(0.08, () => (player.opacity = player.opacity === 1 ? 0.3 : 1));
       k.wait(1, () => {
         blink.cancel();
         player.opacity = 1;
       });
       if (state.hearts <= 0) gameOver();
-    });
+    }
 
     function gameOver() {
       if (state.over) return;
@@ -297,7 +285,7 @@ export function registerArenaScene(k, synth, bridge, arena) {
       synth.stopBgm();
       synth.play("gameover");
       k.shake(10);
-      bridge.onArenaOver?.(state.score, state.wave, { ...best });
+      combat.playerDeath(() => bridge.onArenaOver?.(state.score, state.wave, { ...best }));
     }
 
     /* ---------------- movement / input (static camera) ---------------- */
@@ -313,11 +301,11 @@ export function registerArenaScene(k, synth, bridge, arena) {
       const t = bridge.getTouchDir();
       if (t.x || t.y) dir = k.vec2(t.x, t.y);
 
-      if (dir.len() > 0) {
+      const moving = dir.len() > 0;
+      if (moving) {
         dir = dir.unit();
         state.facing = dir;
         player.move(dir.scale(SPEED));
-        setHeroSprite("hero-run", dir.x < 0);
         dustT -= k.dt();
         if (dustT <= 0) {
           dustT = 0.18;
@@ -328,14 +316,9 @@ export function registerArenaScene(k, synth, bridge, arena) {
             k.lifespan(0.05, { fade: 0.3 }),
           ]);
         }
-      } else {
-        setHeroSprite("hero-idle", player.flipX);
       }
+      combat.tickAnim(moving, dir.x !== 0 ? dir.x < 0 : undefined);
       player.z = player.pos.y;
-
-      if (!combat.isSwinging()) {
-        swordPivot.angle = lerpAngle(swordPivot.angle, faceAngle() + 35, k.dt() * 14);
-      }
 
       if (bridge.takeTouchAttack()) combat.attack();
       if (bridge.takeTouchFire()) combat.fireball();

@@ -43,12 +43,14 @@ export default function GameMode({ onExit }) {
         { buildGame },
         { bakeWorld, bakeArena },
         { buildWorld },
+        { prepareCharacters },
       ] = await Promise.all([
         import("kaplay"),
         import("./synth"),
         import("./engine"),
         import("./assets"),
         import("./content"),
+        import("./characters"),
       ]);
       if (destroyed || !canvasRef.current) return;
 
@@ -76,10 +78,12 @@ export default function GameMode({ onExit }) {
         }
       } catch {}
 
-      // bake both static maps into textures before the engine boots
+      // bake both static maps + composite the character atlases before the
+      // engine boots (all async prep done up front → one kaplay load phase)
       const world = buildWorld();
       const baked = await bakeWorld(world);
       const arena = await bakeArena();
+      const chars = await prepareCharacters();
       if (destroyed || !canvasRef.current) return;
 
       const synth = createSynth();
@@ -130,7 +134,7 @@ export default function GameMode({ onExit }) {
             setGameOver({ score, hi: best.bestScore, wave, arena: true });
           },
         },
-        { world, baked, arena }
+        { world, baked, arena, chars }
       );
     })();
 
