@@ -15,7 +15,7 @@
   `state`/`player` (passed by reference — mutated, never reassigned).
 */
 
-import { CHAR_FRAMES, CHAR_META, charAnchor, setAnim, curAnim, animDuration } from "./characters";
+import { CHAR_FRAMES, CHAR_META, COMBOS, charAnchor, setAnim, curAnim, animDuration } from "./characters";
 
 /* ---- tunables ---- */
 export const SPEED = 92;
@@ -65,7 +65,10 @@ export function makeKit(k) {
 
   // all in-canvas text uses the pixel font at 8px multiples (it's an
   // 8x8-grid face; other sizes turn to mush under crisp upscaling)
-  const ptext = (str, size = 8) => k.text(str, { size, font: "pixel" });
+  // "GamePixel" is the CSS @font-face (globals.css) the DOM already uses, so
+  // it's loaded reliably before the game boots — unlike a canvas-only FontFace,
+  // which raced and left blank/black-box labels. See GameMode's font preload.
+  const ptext = (str, size = 8) => k.text(str, { size, font: "GamePixel" });
 
   function lerpAngle(a, b, t) {
     const d = ((b - a + 540) % 360) - 180;
@@ -214,19 +217,21 @@ export function floatDamage(k, kit, amount, at) {
   Builds the soldier + its shadow. The scene owns movement/camera/input; combat
   (makeCombat) owns the attack chain + hurt/death anims. Returns the entity.
 */
-export function makePlayer(k, kit, spawn) {
+export function makePlayer(k, kit, spawn, hero = "soldier") {
   const { addShadow } = kit;
+  const meta = CHAR_META[hero] || CHAR_META.soldier;
   const player = k.add([
-    k.sprite("soldier"),
+    k.sprite(hero),
     k.pos(spawn.x, spawn.y),
     k.area({ shape: new k.Rect(k.vec2(-6, -9), 12, 9) }),
     k.body(),
-    k.anchor(charAnchor(k, "soldier")),
-    k.scale(CHAR_META.soldier.scale),
+    k.anchor(charAnchor(k, hero)),
+    k.scale(meta.scale),
     k.z(10),
     k.opacity(1),
     "player",
   ]);
+  player.hero = hero;
   setAnim(player, "idle", { force: true });
   addShadow(player, 5.5);
   return player;
@@ -468,79 +473,120 @@ export function makeMobFactory(k, synth, kit, deps) {
 */
 export function makeCombat(k, synth, kit, deps) {
   const { ORANGE, EMBER, poof } = kit;
-  const { state, player, onMobDeath } = deps;
-  let swing = null; // { start, dur, step, dir } | null
-  let hurtUntil = 0;
+  const { state, player, onMobDeath, hero = "soldier" } = deps;
+  const combo = COMBOS[hero] || COMBOS.soldier;
+  const F = CHAR_FRAMES[hero] || CHAR_FRAMES.soldier;
 
-  const F = CHAR_FRAMES.soldier;
+  let swing = null; // { start, dur, step, dir, isFinisher } | null
+  let hurtUntil = 0;
+  let lunge = null; // { dir, until, speed } — collision-safe forward scoot
   const isBusy = () => swing !== null || k.time() < hurtUntil;
 
-  function hurtMob(mob, amount, fromPos) {
+  // bright spark burst where a hit connects
+  function hitSpark(at, colorHex) {
+    const col = k.Color.fromHex(colorHex);
+    for (let i = 0; i < 6; i++) {
+      const a = Math.random() * Math.PI * 2;
+      k.add([
+        k.rect(2, 2), k.pos(at), k.anchor("center"), k.color(col), k.z(1700),
+        k.move(k.vec2(Math.cos(a), Math.sin(a)), 60 + Math.random() * 70),
+        k.opacity(1), k.lifespan(0.05, { fade: 0.18 }),
+      ]);
+    }
+  }
+
+  // a crescent of bright dots swept in the facing direction — the visible slash
+  function slashFx(dir, step, colorHex) {
+    const base = Math.atan2(dir.y, dir.x);
+    const spread = step.arc < 0 ? 2.4 : 1.6; // finishers sweep wider
+    const R = step.reach * 0.55;
+    const col = k.Color.fromHex(colorHex);
+    const n = 7;
+    for (let i = 0; i < n; i++) {
+      const a = base + (i / (n - 1) - 0.5) * spread;
+      const p = player.pos.sub(0, 10).add(k.vec2(Math.cos(a), Math.sin(a)).scale(R));
+      k.add([
+        k.rect(3, 3), k.pos(p), k.anchor("center"), k.color(col), k.z(1600),
+        k.opacity(0.9), k.lifespan(0.05, { fade: 0.12 }),
+      ]);
+    }
+  }
+
+  function hurtMob(mob, amount, fromPos, knockAmt, sparkHex) {
     if (mob.dying) return;
     mob.hp -= amount;
-    mob.knock = mob.pos.sub(fromPos).unit().scale(amount >= 2 ? 210 : 190);
+    const impulse = knockAmt != null ? knockAmt : amount >= 2 ? 210 : 190;
+    mob.knock = mob.pos.sub(fromPos).unit().scale(impulse);
     const s0 = mob.scale.x;
-    k.tween(s0 * 1.22, s0, 0.15, (v) => mob.scaleTo(v));
+    k.tween(s0 * 1.24, s0, 0.14, (v) => mob.scaleTo(v));
     floatDamage(k, kit, amount, mob.pos.sub(0, 4));
+    hitSpark(mob.pos.sub(0, 6), sparkHex || "#ffecd1");
     if (mob.hp <= 0) onMobDeath(mob);
     else mob.playHurt && mob.playHurt();
   }
 
-  // apply one swing's damage — direct arc check (a collision hitbox proved
-  // unreliable). The finisher (step 3) reaches further and sweeps a wider arc.
-  function applySwing(step, dir) {
+  // apply one combo step's damage — direct arc check (a collision hitbox proved
+  // unreliable). Each character's steps carry their own reach/dmg/knock/arc.
+  function applySwing(step, dir, isFinisher) {
     if (state.over) return;
-    const finisher = step === 3;
-    const reach = finisher ? 62 : 46;
     let landed = false;
     for (const mob of k.get("mob")) {
       const to = mob.pos.sub(player.pos);
       const d = to.len();
-      const r = reach + (mob.type === "boss" ? 16 : 0);
+      const r = step.reach + (mob.type === "boss" ? 16 : 0);
       if (d > r) continue;
-      if (d > 16 && to.unit().dot(dir) < (finisher ? -0.15 : 0.2)) continue;
-      hurtMob(mob, finisher ? 2 : 1, player.pos);
+      if (d > 16 && to.unit().dot(dir) < step.arc) continue;
+      hurtMob(mob, step.dmg, player.pos, step.knock, combo.slash);
       landed = true;
     }
     if (landed) {
       synth.play("hit");
-      k.shake(finisher ? 6 : 3);
-    } else if (finisher) {
-      k.shake(2);
+      k.shake(step.shake);
+    } else if (isFinisher) {
+      k.shake(Math.min(step.shake, 3));
     }
   }
 
   function attack() {
     const now = k.time();
     if (state.paused || state.over) return;
-    if (now < state.attackAt + ATTACK_CD) return;
-    // mid-swing: only allow cancelling into the next hit late in the anim
+    if (now < state.attackAt + combo.cd) return;
+    // mid-swing: only cancel into the next hit late in the current anim
     if (swing && now < swing.start + swing.dur * 0.55) return;
     if (now < hurtUntil) return;
 
-    // advance or reset the melee chain (distinct from the score combo)
-    const chained = state.chain > 0 && state.chain < 3 && now - state.chainAt <= CHAIN_WINDOW;
+    // advance or reset the melee chain (distinct from the kill-streak score combo)
+    const chained =
+      state.chain > 0 && state.chain < combo.steps.length && now - state.chainAt <= combo.chainWindow;
     state.chain = chained ? state.chain + 1 : 1;
     state.chainAt = now;
     state.attackAt = now;
 
-    const step = state.chain;
-    const animName = "attack" + step;
-    const dur = animDuration(animName, F[animName]);
+    const step = combo.steps[state.chain - 1];
+    const isFinisher = state.chain >= combo.steps.length;
+    const dur = animDuration(step.anim, F[step.anim]);
     const dir = state.facing.unit();
     if (state.facing.x !== 0) player.flipX = state.facing.x < 0; // keep facing on vertical swings
-    swing = { start: now, dur, step, dir };
-    synth.play(step === 3 ? "explosion" : "slash");
-    setAnim(player, animName, {
+    swing = { start: now, dur, step, dir, isFinisher };
+    synth.play(isFinisher ? "explosion" : "slash");
+
+    // weighty forward lunge, applied collision-safe in tickAnim over the next beat
+    if (step.lunge) {
+      const t = Math.min(dur * 0.6, 0.16);
+      lunge = { dir, until: now + t, speed: step.lunge / t };
+    }
+    slashFx(dir, step, combo.slash);
+
+    setAnim(player, step.anim, {
       force: true,
       onEnd: () => {
         if (swing && swing.start === now) {
           swing = null;
-          if (step === 3) state.chain = 0; // finisher closes the chain
+          if (isFinisher) state.chain = 0; // finisher closes the chain
         }
       },
     });
-    k.wait(dur * 0.45, () => applySwing(step, dir));
+    k.wait(dur * step.hitFrac, () => applySwing(step, dir, isFinisher));
   }
 
   // fireball — ranged, spends mana, bursts on impact with AoE
@@ -608,9 +654,14 @@ export function makeCombat(k, synth, kit, deps) {
     ball.destroy();
   });
 
-  // called every frame from the movement loop. When a one-shot owns the sprite
-  // we leave it alone; otherwise show walk/idle and flip toward travel.
+  // called every frame from the movement loop. Applies an active lunge (via
+  // move, so walls still block it), then — when a one-shot isn't owning the
+  // sprite — shows walk/idle and flips toward travel.
   function tickAnim(moving, flipX) {
+    if (lunge) {
+      if (k.time() < lunge.until) player.move(lunge.dir.scale(lunge.speed));
+      else lunge = null;
+    }
     if (isBusy()) return;
     if (moving && flipX !== undefined) player.flipX = flipX;
     setAnim(player, moving ? "walk" : "idle");

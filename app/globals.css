@@ -192,7 +192,30 @@ html.lenis body {
 @font-face {
   font-family: "GamePixel";
   src: url("/game/pixel.ttf") format("truetype");
-  font-display: swap;
+  font-display: block;
+}
+/* character-select: animated idle preview (each idle sheet is 6 frames of
+   100px → 600px wide; scaled to 160px frames here) */
+.char-idle {
+  width: 160px;
+  height: 160px;
+  background-repeat: no-repeat;
+  background-size: 960px 160px;
+  image-rendering: pixelated;
+  animation: charIdle 0.85s steps(6) infinite;
+}
+@keyframes charIdle {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: -960px 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .char-idle {
+    animation: none;
+  }
 }
 .game-card {
   background: var(--color-ink);

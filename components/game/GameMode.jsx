@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import CharacterSelect from "./CharacterSelect";
 
 /*
   GameMode — the full-screen arcade overlay. Owns the canvas, boots
@@ -24,6 +25,7 @@ export default function GameMode({ onExit }) {
   const [isTouch, setIsTouch] = useState(false);
   const [portrait, setPortrait] = useState(false);
   const [mode, setMode] = useState("story"); // "story" | "arena"
+  const [hero, setHero] = useState(null); // chosen character; null → select screen
   const [name, setName] = useState(() =>
     typeof window !== "undefined" ? localStorage.getItem("omer-arcade-name") || "" : ""
   );
@@ -32,6 +34,7 @@ export default function GameMode({ onExit }) {
 
   useEffect(() => {
     setIsTouch(window.matchMedia("(pointer: coarse)").matches);
+    if (!hero) return; // wait for the character-select screen before booting
 
     let k = null;
     let destroyed = false;
@@ -54,27 +57,35 @@ export default function GameMode({ onExit }) {
       ]);
       if (destroyed || !canvasRef.current) return;
 
-      // Preload the pixel font BEFORE kaplay boots. face.load() only readies
-      // the FontFace object — the canvas 2D subsystem can still miss it on the
-      // first draw, and kaplay caches those blank glyphs permanently (the
-      // black-box labels that needed a reload). So we also: (1) fonts.load()
-      // the exact px sizes kaplay renders, (2) await fonts.ready, and (3) force
-      // a real fillText warm-up so the glyphs are cached before any game text.
+      // The game canvas renders text with the "GamePixel" family — the same
+      // CSS @font-face (globals.css) the DOM already uses, so it's loaded
+      // reliably before the game mounts (unlike a canvas-only FontFace, which
+      // raced and left blank/black-box labels). Belt-and-braces here: force
+      // the EXACT glyphs kaplay draws to fully load at BOTH sizes, await
+      // fonts.ready, poll document.fonts.check until the canvas subsystem
+      // agrees, then a real fillText warm-up — so the first draw never caches
+      // a blank glyph on a cold load.
       try {
-        const face = new FontFace("pixel", "url(/game/pixel.ttf)");
-        await face.load();
-        document.fonts.add(face);
+        const GLYPHS =
+          "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 +-.,:!?%/()x·×>";
         await Promise.all([
-          document.fonts.load("8px pixel"),
-          document.fonts.load("16px pixel"),
+          document.fonts.load("8px GamePixel", GLYPHS),
+          document.fonts.load("16px GamePixel", GLYPHS),
         ]);
         await document.fonts.ready;
+        for (
+          let i = 0;
+          i < 40 && !(document.fonts.check("8px GamePixel") && document.fonts.check("16px GamePixel"));
+          i++
+        ) {
+          await new Promise((r) => setTimeout(r, 25));
+        }
         const warm = document.createElement("canvas").getContext("2d");
         if (warm) {
-          warm.font = "16px pixel";
-          warm.fillText("ABCabc0123·×>", 0, 20);
-          warm.font = "8px pixel";
-          warm.fillText("ABCabc0123·×>", 0, 20);
+          warm.font = "16px GamePixel";
+          warm.fillText(GLYPHS, 0, 20);
+          warm.font = "8px GamePixel";
+          warm.fillText(GLYPHS, 0, 20);
         }
       } catch {}
 
@@ -134,7 +145,7 @@ export default function GameMode({ onExit }) {
             setGameOver({ score, hi: best.bestScore, wave, arena: true });
           },
         },
-        { world, baked, arena, chars }
+        { world, baked, arena, chars, hero }
       );
     })();
 
@@ -156,7 +167,7 @@ export default function GameMode({ onExit }) {
       } catch {}
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hero]);
 
   // panel close (E or Esc) + mute keys live at the DOM layer
   useEffect(() => {
@@ -238,6 +249,17 @@ export default function GameMode({ onExit }) {
     refocusCanvas();
   };
 
+  // back to the character-select screen: tear down the current run (the boot
+  // effect's cleanup fires when hero → null) and re-pick a fighter
+  const changeHero = () => {
+    setGameOver(null);
+    setPanel(null);
+    setSubmit(null);
+    setMode("story");
+    setReady(false);
+    setHero(null);
+  };
+
   // leave the arena back to the overworld (from the arena game-over card)
   const backToStory = () => {
     setGameOver(null);
@@ -291,7 +313,10 @@ export default function GameMode({ onExit }) {
     <div className="fixed inset-0 z-[100] bg-ink" role="application" aria-label="Portfolio arcade game">
       <canvas ref={canvasRef} className="block h-full w-full" />
 
-      {!ready && (
+      {/* character-select comes before boot; loading veil only after a pick */}
+      {!hero && <CharacterSelect onPick={setHero} onExit={onExit} />}
+
+      {hero && !ready && (
         <div className="absolute inset-0 grid place-items-center bg-ink">
           <p className="label label-cream animate-pulse">Loading the arcade…</p>
         </div>
@@ -315,8 +340,8 @@ export default function GameMode({ onExit }) {
       {!isTouch && (
         <p className="game-pixel pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] text-cream/60">
           {mode === "arena"
-            ? "WASD MOVE · LMB SWORD · SPACE FIREBALL · ESC STORY"
-            : "WASD MOVE · LMB SWORD · SPACE FIREBALL · E READ · ESC EXIT"}
+            ? "WASD MOVE · LMB ATTACK · SPACE FIREBALL · ESC STORY"
+            : "WASD MOVE · LMB ATTACK · SPACE FIREBALL · E READ · ESC EXIT"}
         </p>
       )}
 
@@ -394,9 +419,12 @@ export default function GameMode({ onExit }) {
             <p className="game-pixel mt-5 text-[10px] text-cream/80">
               SCORE <span className="text-orange">{gameOver.score}</span> · BEST {gameOver.hi}
             </p>
-            <div className="mt-7 flex justify-center gap-3">
+            <div className="mt-7 flex flex-wrap justify-center gap-3">
               <button onClick={restart} className="game-btn">
                 RUN IT BACK
+              </button>
+              <button onClick={changeHero} className="game-btn game-btn-ghost">
+                CHANGE FIGHTER
               </button>
               <button onClick={onExit} className="game-btn game-btn-ghost">
                 EXIT
@@ -479,6 +507,9 @@ export default function GameMode({ onExit }) {
               </button>
               <button onClick={backToStory} className="game-btn game-btn-ghost">
                 TO STORY
+              </button>
+              <button onClick={changeHero} className="game-btn game-btn-ghost">
+                CHANGE FIGHTER
               </button>
               <button onClick={onExit} className="game-btn game-btn-ghost">
                 EXIT

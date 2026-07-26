@@ -39,6 +39,75 @@ export const CHAR_META = {
 const SPEED = { idle: 7, walk: 12, attack1: 15, attack2: 15, attack3: 15, hurt: 14, death: 9 };
 const LOOP = new Set(["idle", "walk"]);
 
+/*
+  Per-character melee combos. Each is a list of steps the player chains through
+  (attack1 → attack2 [→ attack3]); the last step is the finisher (bigger shake,
+  resets the chain). Per step:
+    anim    — which attack sheet to play
+    dmg     — damage dealt to a mob it connects with
+    reach   — arc radius (px) the hit checks
+    knock   — knockback impulse on hit
+    lunge   — px the player scoots forward at the swing (weighty gap-close)
+    shake   — camera shake on connect
+    hitFrac — fraction of the anim when the hit lands (synced to the swing)
+    arc     — min facing dot for a hit (lower = wider arc; finishers go wide)
+  cd = floor between swings; chainWindow = seconds to chain the next step; the
+  score model is untouched — these only change feel + how fast mobs die.
+*/
+export const COMBOS = {
+  soldier: {
+    label: "3-HIT BLADE",
+    cd: 0.12,
+    chainWindow: 0.55,
+    slash: "#ffecd1",
+    steps: [
+      { anim: "attack1", dmg: 1, reach: 46, knock: 150, lunge: 12, shake: 2, hitFrac: 0.4, arc: 0.2 },
+      { anim: "attack2", dmg: 1, reach: 50, knock: 175, lunge: 15, shake: 3, hitFrac: 0.4, arc: 0.2 },
+      { anim: "attack3", dmg: 2, reach: 66, knock: 240, lunge: 22, shake: 6, hitFrac: 0.45, arc: -0.2 },
+    ],
+  },
+  orc: {
+    label: "2-HIT HEAVY",
+    cd: 0.22,
+    chainWindow: 0.7,
+    slash: "#9ad24b",
+    steps: [
+      { anim: "attack1", dmg: 2, reach: 46, knock: 250, lunge: 10, shake: 4, hitFrac: 0.5, arc: 0.15 },
+      { anim: "attack2", dmg: 3, reach: 58, knock: 350, lunge: 18, shake: 8, hitFrac: 0.55, arc: -0.1 },
+    ],
+  },
+  demon: {
+    label: "2-HIT LUNGE",
+    cd: 0.15,
+    chainWindow: 0.6,
+    slash: "#ff5a4d",
+    steps: [
+      { anim: "attack1", dmg: 1, reach: 48, knock: 150, lunge: 14, shake: 2, hitFrac: 0.45, arc: 0.2 },
+      { anim: "attack2", dmg: 2, reach: 64, knock: 230, lunge: 44, shake: 5, hitFrac: 0.5, arc: 0.0 },
+    ],
+  },
+  blood: {
+    label: "FAST 2-HIT",
+    cd: 0.05,
+    chainWindow: 0.85,
+    slash: "#ff7db0",
+    steps: [
+      { anim: "attack1", dmg: 1, reach: 40, knock: 110, lunge: 8, shake: 1, hitFrac: 0.4, arc: 0.25 },
+      { anim: "attack2", dmg: 1, reach: 42, knock: 130, lunge: 9, shake: 2, hitFrac: 0.4, arc: 0.25 },
+    ],
+  },
+};
+
+// playable roster + copy for the character-select screen (order = display order)
+export const HERO_META = {
+  soldier: { name: "SOLDIER", title: "Bladedancer", combo: "3-HIT BLADE", blurb: "Balanced three-hit sword combo with a wide finisher." },
+  orc: { name: "ORC", title: "Brute", combo: "2-HIT HEAVY", blurb: "Slow, bone-crushing swings — huge damage and knockback." },
+  demon: { name: "DEMON", title: "Reaver", combo: "2-HIT LUNGE", blurb: "A lunging second strike that closes the gap for you." },
+  blood: { name: "BLOOD", title: "Frenzy", combo: "FAST 2-HIT", blurb: "A rapid low-damage flurry — pure attack speed." },
+};
+
+export const HEROES = Object.keys(HERO_META);
+
 const FRAME = 100; // px per frame in the source sheets
 
 function loadImage(src) {

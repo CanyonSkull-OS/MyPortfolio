@@ -87,7 +87,7 @@ function waveComposition(w, rand) {
   return { specs, label: null, banner: null };
 }
 
-export function registerArenaScene(k, synth, bridge, arena) {
+export function registerArenaScene(k, synth, bridge, arena, hero = "soldier") {
   k.loadSprite("arena", arena.url);
 
   k.scene("arena", () => {
@@ -126,11 +126,8 @@ export function registerArenaScene(k, synth, bridge, arena) {
       ]);
     }
 
-    /* ---------------- player (soldier: side-view, 3-hit combo) -------- */
-    const player = makePlayer(k, kit, {
-      x: arena.playerSpawn.x,
-      y: arena.playerSpawn.y,
-    });
+    /* ---------------- player (selected hero: side-view combo) -------- */
+    const player = makePlayer(k, kit, { x: arena.playerSpawn.x, y: arena.playerSpawn.y }, hero);
 
     /* ---------------- HUD: shared widgets + arena lines ---------------- */
     const hud = makeHud(k, kit);
@@ -177,6 +174,7 @@ export function registerArenaScene(k, synth, bridge, arena) {
     const combat = makeCombat(k, synth, kit, {
       state,
       player,
+      hero,
       onMobDeath: (mob) => killMob(mob),
     });
     // leash:false → wave mobs commit to the player across the whole room

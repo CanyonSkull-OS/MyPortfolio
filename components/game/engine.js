@@ -55,15 +55,15 @@ const MONUMENT_LOOK = {
   F: "chest", G: "statue", H: "statue", I: "fountain", J: "fountain",
 };
 
-export function buildGame(k, synth, bridge, { world, baked, arena, chars }) {
+export function buildGame(k, synth, bridge, { world, baked, arena, chars, hero = "soldier" }) {
   const kit = makeKit(k);
   const { CREAM, ORANGE, INK, setCam, ptext, poof } = kit;
 
   k.setBackground(kit.hex("#001524"));
-  // NOTE: the pixel font is preloaded as a browser FontFace ("pixel") in
-  // GameMode BEFORE this runs, so kaplay renders it straight through
-  // ctx.font. Loading it via kaplay's own atlas raced the first frame and
-  // left blank (black-box) text on some Press Starts — do not re-add it.
+  // NOTE: canvas text uses the "GamePixel" CSS @font-face (globals.css),
+  // force-loaded in GameMode BEFORE this runs, so kaplay renders it straight
+  // through ctx.font. Loading via kaplay's own atlas raced the first frame and
+  // left blank (black-box) text — do not re-add it.
   k.loadSprite("world", baked.url);
   loadDungeonSprites(k);
   registerCharacters(k, chars); // side-view character atlases (same load phase)
@@ -214,11 +214,13 @@ export function buildGame(k, synth, bridge, { world, baked, arena, chars }) {
       refreshHUD();
     }
 
-    /* ---------------- player (soldier: side-view, 3-hit combo) -------- */
-    const player = makePlayer(k, kit, {
-      x: world.playerSpawn.x * 16 + 8,
-      y: world.playerSpawn.y * 16 + 14,
-    });
+    /* ---------------- player (selected hero: side-view combo) -------- */
+    const player = makePlayer(
+      k,
+      kit,
+      { x: world.playerSpawn.x * 16 + 8, y: world.playerSpawn.y * 16 + 14 },
+      hero
+    );
 
     /* ---------------- HUD: shared widgets + story-specific lines ------ */
     const hud = makeHud(k, kit);
@@ -287,6 +289,7 @@ export function buildGame(k, synth, bridge, { world, baked, arena, chars }) {
     const combat = makeCombat(k, synth, kit, {
       state,
       player,
+      hero,
       onMobDeath: (mob) => killMob(mob),
     });
     const spawnMob = makeMobFactory(k, synth, kit, {
@@ -509,7 +512,7 @@ export function buildGame(k, synth, bridge, { world, baked, arena, chars }) {
 
   // the endless arena lives on the same KAPLAY handle, entered from the
   // portal monument in The Landing (or the debug hook)
-  if (arena) registerArenaScene(k, synth, bridge, arena);
+  if (arena) registerArenaScene(k, synth, bridge, arena, hero);
   api.enterArena = () => k.go("arena");
   api.enterStory = () => k.go("world");
 
